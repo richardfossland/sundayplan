@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "./src",
+    "paths": {
+      "@sundayplan/shared": ["../shared/src/index.ts"],
+      "@sundayplan/shared/*": ["../shared/src/*"]
+    }
+  },
+  "include": ["src"]
+}

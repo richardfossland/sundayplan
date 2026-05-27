@@ -1,0 +1,26 @@
+# deps
+node_modules/
+
+# build outputs
+dist/
+.next/
+build/
+out/
+.turbo/
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env*.local
+
+# logs + caches
+*.log
+.DS_Store
+
+# editor
+.vscode/
+.idea/
+
+# generated types (regen'd via `pnpm db:types`)
+packages/db/types.generated.ts

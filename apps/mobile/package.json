@@ -1,0 +1,19 @@
+{
+  "name": "@sundayplan/mobile",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev":       "echo 'TODO: expo start — Phase 8.1'",
+    "build":     "echo 'TODO: eas build — Phase 12.3'",
+    "typecheck": "tsc --noEmit",
+    "lint":      "echo 'lint placeholder'",
+    "test":      "echo 'test placeholder'"
+  },
+  "dependencies": {
+    "@sundayplan/shared": "workspace:*",
+    "@sundayplan/sdk":    "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

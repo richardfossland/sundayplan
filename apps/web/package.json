@@ -1,0 +1,21 @@
+{
+  "name": "@sundayplan/web",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev":       "echo 'TODO: next dev — Phase 2.1'",
+    "build":     "echo 'TODO: next build — Phase 2.1'",
+    "lint":      "echo 'lint placeholder'",
+    "typecheck": "tsc --noEmit",
+    "test":      "echo 'test placeholder'",
+    "clean":     "rm -rf .next .turbo"
+  },
+  "dependencies": {
+    "@sundayplan/shared": "workspace:*",
+    "@sundayplan/sdk":    "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

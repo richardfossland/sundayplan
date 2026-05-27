@@ -1,0 +1,325 @@
+/**
+ * Domain types — hand-written, kept in sync with the SQL schema in
+ * `packages/db/migrations/`. We don't auto-generate these because
+ *   (a) we want hand-controlled discriminated unions for `kind` fields, and
+ *   (b) Supabase's generated types are noisier than we need.
+ *
+ * If the schema changes, update here. The Zod schemas in `./schemas`
+ * mirror these shapes and are the runtime validation contract at API
+ * boundaries.
+ */
+
+// ── Tenancy ─────────────────────────────────────────────────────────────────
+
+export type ChurchPlanTier = "free" | "starter" | "growth" | "network";
+
+export interface Church {
+  id: string;
+  name: string;
+  slug: string;
+  plan_tier: ChurchPlanTier;
+  locale: string;
+  timezone: string;
+  denomination: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export type TonoStatus =
+  | "none"
+  | "state_church_blanket"
+  | "direct_agreement"
+  | "application_pending"
+  | "not_applicable";
+
+export type CcliSize = "A" | "B" | "C" | "D" | "E" | "F";
+
+export interface ChurchSettings {
+  church_id: string;
+  ccli_license_number: string | null;
+  ccli_size_category: CcliSize | null;
+  ccli_streaming_addon: boolean;
+  tono_license_status: TonoStatus;
+  tono_customer_id: string | null;
+  tono_streaming_addon: boolean;
+  default_max_assignments_per_month: number;
+  reminder_cadence: { days_before: number[]; hours_before: number[] };
+  sms_quota_used: number;
+  auto_buy_sms_overage: boolean;
+  sundaystage_connected: boolean;
+  sundayrec_connected: boolean;
+  sundaysong_connected: boolean;
+}
+
+export type ChurchRole = "admin" | "planner" | "team_lead" | "viewer";
+
+export interface ChurchMember {
+  church_id: string;
+  user_id: string;
+  role: ChurchRole;
+  created_at: string;
+}
+
+// ── People ──────────────────────────────────────────────────────────────────
+
+export type MemberStatus = "active" | "inactive" | "archived";
+export type ContactChannel = "sms" | "email" | "push";
+
+export interface Member {
+  id: string;
+  church_id: string;
+  display_name: string;
+  phone_e164: string | null;
+  email: string | null;
+  user_id: string | null;
+  language: string;
+  preferred_channel: ContactChannel;
+  birthday: string | null; // ISO date
+  joined_at: string | null;
+  status: MemberStatus;
+  notes: string | null;
+  tags: string[];
+  target_serves_per_month: number | null;
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+}
+
+export type SkillLevel = "training" | "capable" | "lead" | "trainer";
+
+export interface Team {
+  id: string;
+  church_id: string;
+  name: string;
+  color: string | null;
+  description: string | null;
+}
+
+export interface Role {
+  id: string;
+  team_id: string;
+  name: string;
+  description: string | null;
+}
+
+export interface TeamMembership {
+  member_id: string;
+  team_id: string;
+  role_id: string;
+  skill_level: SkillLevel;
+  notes: string | null;
+}
+
+// ── Availability ────────────────────────────────────────────────────────────
+
+export type AvailabilityKind = "recurring" | "range" | "specific";
+export type AvailabilityVisibility = "private" | "planner" | "team";
+
+export interface Availability {
+  id: string;
+  member_id: string;
+  kind: AvailabilityKind;
+  pattern:
+    | { weekday: string }
+    | { from: string; to: string }
+    | { dates: string[] }
+    | Record<string, unknown>;
+  reason: string | null;
+  reason_visibility: AvailabilityVisibility;
+}
+
+// ── Services ────────────────────────────────────────────────────────────────
+
+export type ServiceItemKind =
+  | "welcome"
+  | "song"
+  | "scripture"
+  | "sermon"
+  | "announcement"
+  | "gap";
+
+export type TemplateItemKind =
+  | "welcome"
+  | "worship_set"
+  | "scripture"
+  | "sermon"
+  | "response"
+  | "closing"
+  | "announcement"
+  | "gap";
+
+export type ServiceState =
+  | "draft"
+  | "published"
+  | "in_progress"
+  | "played"
+  | "archived";
+
+export interface ServiceTemplate {
+  id: string;
+  church_id: string;
+  name: string;
+  default_duration_min: number;
+}
+
+export interface TemplateItem {
+  template_id: string;
+  position: number;
+  label: string;
+  kind: TemplateItemKind;
+  duration_min: number;
+}
+
+export interface ServiceTeamRequirement {
+  template_id: string;
+  role_id: string;
+  quantity: number;
+}
+
+export interface Service {
+  id: string;
+  church_id: string;
+  template_id: string | null;
+  name: string;
+  starts_at_utc: string;
+  notes: string | null;
+  state: ServiceState;
+  was_streamed_flag: boolean;
+}
+
+export interface ServiceItem {
+  id: string;
+  service_id: string;
+  position: number;
+  label: string;
+  kind: ServiceItemKind;
+  duration_min: number;
+  notes: string | null;
+  song_id: string | null;
+  scripture_ref: string | null;
+}
+
+// ── Songs ───────────────────────────────────────────────────────────────────
+
+export interface Song {
+  id: string;
+  church_id: string;
+  title: string;
+  author: string | null;
+  ccli_song_id: string | null;
+  tono_work_id: string | null;
+  default_key: string | null;
+  tempo_bpm: number | null;
+  language: string;
+  themes: string[];
+  last_used_at: string | null;
+  sundaysong_id: string | null;
+  chord_chart_url: string | null;
+  demo_url: string | null;
+}
+
+export interface Setlist {
+  id: string;
+  service_id: string;
+}
+
+export interface SetlistSong {
+  setlist_id: string;
+  position: number;
+  song_id: string;
+  key_override: string | null;
+  notes: string | null;
+}
+
+// ── Assignments ─────────────────────────────────────────────────────────────
+
+export type AssignmentStatus =
+  | "pending"
+  | "invited"
+  | "accepted"
+  | "declined"
+  | "no_response"
+  | "removed";
+
+export type AssignmentSource = "planner" | "auto_fill" | "swap";
+
+export interface Assignment {
+  id: string;
+  church_id: string;
+  service_id: string;
+  role_id: string;
+  member_id: string;
+  service_item_id: string | null;
+  status: AssignmentStatus;
+  score: number | null;
+  score_breakdown: ScoreBreakdown | null;
+  invited_at: string | null;
+  responded_at: string | null;
+  next_reminder_at: string | null;
+  created_by: AssignmentSource;
+}
+
+export interface ScoreBreakdown {
+  total: number;
+  components: ScoreComponent[];
+  warnings: string[];
+}
+
+export interface ScoreComponent {
+  name:
+    | "availability"
+    | "skill_match"
+    | "rotation_fairness"
+    | "frequency_balance"
+    | "burnout"
+    | "pairing"
+    | "variety"
+    | "custom";
+  weight: number;
+  raw: number;
+  contribution: number;
+  explanation: string;
+}
+
+// ── Magic-link auth ─────────────────────────────────────────────────────────
+
+export type MagicLinkPurpose =
+  | "assignment_response"
+  | "availability_set"
+  | "swap_request"
+  | "generic";
+
+export interface MagicLinkClaims {
+  /** member id — scopes RLS reads */
+  sub: string;
+  member_id: string;
+  church_id: string;
+  purpose: MagicLinkPurpose;
+  assignment_id?: string;
+  /** unix seconds */
+  exp: number;
+  /** unix seconds */
+  iat: number;
+  /** prevent reuse */
+  jti: string;
+}
+
+// ── Comms ───────────────────────────────────────────────────────────────────
+
+export type SmsStatus =
+  | "queued" | "sent" | "delivered" | "failed" | "bounced";
+
+export interface SmsLog {
+  id: string;
+  church_id: string;
+  member_id: string | null;
+  provider: string;
+  template_id: string | null;
+  to_recipient: string;
+  body_hash: string | null;
+  status: SmsStatus;
+  cost_cents: number | null;
+  provider_message_id: string | null;
+  sent_at: string | null;
+  created_at: string;
+}

@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "preserve",
+    "paths": {
+      "@sundayplan/shared": ["../../packages/shared/src/index.ts"],
+      "@sundayplan/sdk":    ["../../packages/sdk/src/index.ts"]
+    }
+  },
+  "include": ["src", "next-env.d.ts"]
+}

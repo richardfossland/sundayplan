@@ -372,7 +372,7 @@ For metrics dashboard. Combines `church.created_at`, first `member` row, first d
 - [ ] Phase 2 — Web admin shell + people/teams
 - [ ] Phase 3 — Service planning + setlist
 - [~] Phase 4 — Schedule view + conflict detection — 4.2 conflict-rule engine implemented (`packages/sdk/src/conflicts.ts`, 7 of 9 rules + 19 Vitest tests; rules 5 family & 9 key-person deferred pending schema additions); 4.1 schedule view + 4.3 settings pending
-- [~] Phase 5 — AI auto-fill — 5.1 scoring engine implemented (`packages/sdk/src/scoring.ts`) + 25 Vitest unit tests; 5.2 UX + 5.3 NL tweaks pending
+- [~] Phase 5 — AI auto-fill — 5.1 scoring engine (`scoring.ts`, 25 tests) + 5.2 orchestrator core (`autofill.ts` — deterministic fill with tiebreaker, double-book prevention, unfilled reasons; 9 tests) done; 5.2 UX + 5.3 NL tweaks pending
 - [ ] Phase 6 — Communications infra (SMS, email, push)
 - [ ] Phase 7 — Magic-link volunteer response
 - [ ] Phase 8 — Native mobile app

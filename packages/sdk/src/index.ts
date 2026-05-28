@@ -7,4 +7,5 @@
 
 export * from "./scoring";
 export * from "./conflicts";
+export * from "./autofill";
 export * from "./api";

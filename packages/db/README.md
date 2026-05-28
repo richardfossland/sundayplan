@@ -4,12 +4,13 @@ Supabase migrations + generated types for SundayPlan.
 
 ## Migrations
 
-Located in `migrations/`, numbered and applied in order. The CLI reads them via:
+Located in `supabase/migrations/` at the repo root (the Supabase CLI's fixed
+location), numbered and applied in order. Run from the repo root:
 
 ```bash
-# Local dev (Docker required):
+# Local dev (Docker/Colima required):
 supabase start
-supabase db reset            # reapplies all migrations from scratch
+supabase db reset            # reapplies all migrations from scratch + seed
 
 # Push to a remote project:
 supabase db push

@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "types":     "echo 'Generate types: supabase gen types typescript --local > types.generated.ts'",
-    "migrate":   "echo 'Run migrations: supabase db reset (local) or supabase db push (staging)'",
+    "types":     "supabase gen types typescript --local --workdir ../.. > types.generated.ts",
+    "migrate":   "supabase --workdir ../.. db reset",
     "typecheck": "echo 'no-op'",
     "lint":      "echo 'no-op'",
     "test":      "echo 'no-op'",

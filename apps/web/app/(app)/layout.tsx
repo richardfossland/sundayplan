@@ -10,6 +10,13 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   // Middleware already gates this, but guard server-side too.
   if (!user) redirect("/sign-in");
 
+  // A planner with no church yet goes through onboarding first.
+  const { data: memberships } = await supabase
+    .from("church_member")
+    .select("church_id")
+    .eq("user_id", user.id);
+  if (!memberships || memberships.length === 0) redirect("/onboarding");
+
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-56 shrink-0 border-r border-white/[0.06] md:block">

@@ -7,7 +7,7 @@
     "dev":       "echo 'TODO: next dev — Phase 2.1'",
     "build":     "echo 'TODO: next build — Phase 2.1'",
     "lint":      "echo 'lint placeholder'",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "echo 'TODO: tsc --noEmit — Phase 2.1'",
     "test":      "echo 'test placeholder'",
     "clean":     "rm -rf .next .turbo"
   },

@@ -15,7 +15,7 @@
     "typecheck": "tsc --noEmit",
     "lint":      "echo lint placeholder",
     "test":      "echo test placeholder",
-    "build":     "echo no-build (TS source consumed directly)"
+    "build":     "echo 'no-build (TS source consumed directly)'"
   },
   "dependencies": {
     "zod": "^3.24.0"

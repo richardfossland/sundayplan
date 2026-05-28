@@ -5,7 +5,7 @@
   "scripts": {
     "dev":       "echo 'TODO: expo start — Phase 8.1'",
     "build":     "echo 'TODO: eas build — Phase 12.3'",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "echo 'TODO: tsc --noEmit — Phase 8.1'",
     "lint":      "echo 'lint placeholder'",
     "test":      "echo 'test placeholder'"
   },

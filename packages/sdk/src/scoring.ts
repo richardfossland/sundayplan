@@ -56,7 +56,7 @@ export interface ScoringInputs {
     role_skill_required: SkillLevel;
   };
   /** Weights, defaults sensible per the build plan. */
-  weights?: Partial<typeof DEFAULT_WEIGHTS>;
+  weights?: Partial<ScoreWeights>;
 }
 
 export const DEFAULT_WEIGHTS = {
@@ -69,7 +69,7 @@ export const DEFAULT_WEIGHTS = {
   custom:             5,
 } as const;
 
-export type ScoreWeights = typeof DEFAULT_WEIGHTS;
+export type ScoreWeights = { [K in keyof typeof DEFAULT_WEIGHTS]: number };
 
 /**
  * Returns `null` when the candidate fails a hard gate (availability).

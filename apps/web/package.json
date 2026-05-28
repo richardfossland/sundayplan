@@ -4,17 +4,19 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev":       "next dev",
-    "build":     "next build",
-    "start":     "next start",
-    "lint":      "echo 'lint placeholder'",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "echo 'lint placeholder'",
     "typecheck": "tsc --noEmit",
-    "test":      "echo 'test placeholder'",
-    "clean":     "rm -rf .next .turbo"
+    "test": "echo 'test placeholder'",
+    "clean": "rm -rf .next .turbo"
   },
   "dependencies": {
-    "@sundayplan/shared": "workspace:*",
     "@sundayplan/sdk": "workspace:*",
+    "@sundayplan/shared": "workspace:*",
+    "@supabase/ssr": "^0.10.3",
+    "@supabase/supabase-js": "^2.106.2",
     "next": "^15.5.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"

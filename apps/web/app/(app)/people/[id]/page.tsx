@@ -2,11 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Card, CardHeader, SectionTitle } from "@/components/ui";
 import { SkillBadge, StatusBadge, shortDate } from "@/components/people";
-import { buildPeople, buildPersonSchedule, getPerson } from "@/lib/mock";
-
-export function generateStaticParams() {
-  return buildPeople().map((p) => ({ id: p.id }));
-}
+import { buildPersonSchedule, getPerson } from "@/lib/mock";
 
 const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> = {
   accepted: "success",

@@ -1,6 +1,8 @@
 import { CHURCH_NAME } from "@/lib/mock";
+import { SignOutButton } from "@/components/shell/SignOutButton";
 
-export function TopBar() {
+export function TopBar({ userEmail }: { userEmail: string | null }) {
+  const initial = (userEmail?.[0] ?? "?").toUpperCase();
   return (
     <header className="flex h-14 items-center justify-between border-b border-white/[0.06] px-5">
       <div className="flex items-center gap-3">
@@ -21,8 +23,10 @@ export function TopBar() {
           Search
           <kbd className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[0.65rem] text-ink-400">⌘K</kbd>
         </div>
+        {userEmail ? <span className="hidden text-xs text-ink-500 sm:inline">{userEmail}</span> : null}
+        <SignOutButton />
         <div className="h-7 w-7 rounded-full bg-gradient-to-br from-gold-300 to-gold-600 text-center text-sm font-semibold leading-7 text-ink-950">
-          R
+          {initial}
         </div>
       </div>
     </header>

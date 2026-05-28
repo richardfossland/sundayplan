@@ -2,11 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card, CardHeader, SectionTitle } from "@/components/ui";
 import { SkillBadge } from "@/components/people";
-import { buildTeamInsights, buildTeamRoles, buildTeams, getTeam } from "@/lib/mock";
-
-export function generateStaticParams() {
-  return buildTeams().map((t) => ({ id: t.id }));
-}
+import { buildTeamInsights, buildTeamRoles, getTeam } from "@/lib/mock";
 
 export default async function TeamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;

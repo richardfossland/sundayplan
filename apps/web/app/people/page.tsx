@@ -1,11 +1,23 @@
-import { PlaceholderPage } from "@/components/ui";
+import { SectionTitle } from "@/components/ui";
+import { PeopleTable } from "@/components/people";
+import { buildPeople } from "@/lib/mock";
 
-export default function Page() {
+export default function PeoplePage() {
+  const people = buildPeople();
+  const active = people.filter((p) => p.status === "active").length;
+
   return (
-    <PlaceholderPage
-      title="People"
-      phase="Phase 2.2"
-      blurb="A light member registry — who can serve, how to reach them, and what they can do. Phone is the highest-value field; SMS is how the whole thing works."
-    />
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <SectionTitle eyebrow="Registry">People</SectionTitle>
+        <span className="text-sm text-ink-500">
+          {active} active · {people.length} total
+        </span>
+      </div>
+      <PeopleTable people={people} />
+      <p className="text-center text-xs text-ink-600">
+        Phone is the highest-value field — SMS magic links are how volunteers respond. Bulk import + filters land with the backend.
+      </p>
+    </div>
   );
 }

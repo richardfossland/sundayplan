@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+/*
+ * Brand theme — mirrors packages/shared/src/tokens.ts (single source of truth
+ * for the values; duplicated here because CSS can't import TS). Namespaces
+ * avoid clobbering Tailwind's defaults: ink = neutral, royal = brand blue,
+ * gold = accent.
+ */
+@theme {
+  --font-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+  --color-ink-50: oklch(0.98 0 0);
+  --color-ink-100: oklch(0.96 0 0);
+  --color-ink-200: oklch(0.92 0 0);
+  --color-ink-300: oklch(0.86 0 0);
+  --color-ink-400: oklch(0.70 0 0);
+  --color-ink-500: oklch(0.54 0 0);
+  --color-ink-600: oklch(0.42 0 0);
+  --color-ink-700: oklch(0.32 0 0);
+  --color-ink-800: oklch(0.22 0 0);
+  --color-ink-900: oklch(0.14 0 0);
+  --color-ink-950: oklch(0.08 0 0);
+
+  --color-royal-50: oklch(0.96 0.02 252);
+  --color-royal-100: oklch(0.91 0.04 252);
+  --color-royal-200: oklch(0.82 0.08 252);
+  --color-royal-300: oklch(0.70 0.12 252);
+  --color-royal-400: oklch(0.58 0.16 252);
+  --color-royal-500: oklch(0.46 0.18 252);
+  --color-royal-600: oklch(0.36 0.16 252);
+  --color-royal-700: oklch(0.28 0.13 252);
+  --color-royal-800: oklch(0.20 0.10 252);
+  --color-royal-900: oklch(0.13 0.07 252);
+  --color-royal-950: oklch(0.08 0.04 252);
+
+  --color-gold-50: oklch(0.98 0.02 85);
+  --color-gold-100: oklch(0.95 0.06 85);
+  --color-gold-200: oklch(0.91 0.10 85);
+  --color-gold-300: oklch(0.87 0.14 85);
+  --color-gold-400: oklch(0.84 0.16 85);
+  --color-gold-500: oklch(0.78 0.16 80);
+  --color-gold-600: oklch(0.68 0.15 75);
+  --color-gold-700: oklch(0.56 0.13 70);
+  --color-gold-800: oklch(0.42 0.10 65);
+  --color-gold-900: oklch(0.28 0.07 60);
+
+  --color-success: oklch(0.74 0.18 145);
+  --color-warning: oklch(0.80 0.16 75);
+  --color-danger: oklch(0.65 0.22 27);
+  --color-info: oklch(0.70 0.14 245);
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    background-color: var(--color-ink-950);
+    color: var(--color-ink-200);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    /* Deep royal glow up top-left, fading into ink — atmosphere, not flat. */
+    background-image:
+      radial-gradient(80rem 50rem at -10% -20%, oklch(0.20 0.10 252 / 0.55), transparent 60%),
+      radial-gradient(60rem 40rem at 110% 0%, oklch(0.28 0.07 60 / 0.18), transparent 55%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    background: var(--color-gold-400);
+    color: var(--color-ink-950);
+  }
+
+  * {
+    border-color: oklch(1 0 0 / 0.08);
+  }
+}
+
+/* A hairline gold keyline — the recurring "Sunday" warmth motif. */
+@utility keyline {
+  border-top: 1px solid oklch(0.84 0.16 85 / 0.35);
+}

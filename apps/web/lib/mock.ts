@@ -1,0 +1,143 @@
+/**
+ * Mock church data for the dashboard demo. Entirely client-free of any
+ * backend — it exists so the dashboard can run the real SDK engines
+ * (autoFill + detectConflicts) against believable data and render the
+ * result. Replaced by Supabase queries once Phase 1.2/1.3 land.
+ *
+ * Church: "Alta Frikirke". Upcoming service: Sunday 7 June 2026.
+ */
+
+import type { Availability, SkillLevel } from "@sundayplan/shared";
+import type {
+  AutoFillSlot,
+  ConflictContext,
+  PlacedAssignment,
+} from "@sundayplan/sdk";
+import type { ScoringInputs } from "@sundayplan/sdk";
+
+export const CHURCH_NAME = "Alta Frikirke";
+export const DEMO_NOW = new Date("2026-06-01T08:00:00Z");
+
+const SERVICE_ID = "svc-0607";
+const SERVICE_DATE = new Date("2026-06-07T09:00:00Z"); // a Sunday
+export const SERVICE_LABEL = "Sunday 7 June 2026 · 11:00";
+
+export const ROLE_NAMES: Record<string, string> = {
+  r_vocal: "Lead vocal",
+  r_drums: "Drums",
+  r_keys: "Keys",
+  r_sound: "Sound",
+  r_guitar: "Lead guitar",
+};
+
+interface Profile {
+  id: string;
+  name: string;
+  joined_at: string;
+  skill: SkillLevel;
+  days_since: number | null;
+  days_since_same_role: number | null;
+  accepted_recent: number;
+  target: number;
+  consecutive: number;
+  availability: Availability[];
+  partner: boolean;
+  trainer_paired: boolean;
+}
+
+function blocked(member_id: string, date: string, reason: string): Availability {
+  return {
+    id: `av-${member_id}`,
+    member_id,
+    kind: "specific",
+    pattern: { dates: [date] },
+    reason,
+    reason_visibility: "planner",
+  };
+}
+
+const PROFILES: Profile[] = [
+  { id: "m-maria", name: "Maria Hansen", joined_at: "2019-02-01", skill: "lead", days_since: 21, days_since_same_role: 28, accepted_recent: 6, target: 2, consecutive: 1, availability: [], partner: true, trainer_paired: false },
+  { id: "m-ingrid", name: "Ingrid Berg", joined_at: "2020-09-12", skill: "lead", days_since: 14, days_since_same_role: 21, accepted_recent: 5, target: 2, consecutive: 1, availability: [], partner: false, trainer_paired: false },
+  { id: "m-erik", name: "Erik Dahl", joined_at: "2021-05-20", skill: "capable", days_since: 35, days_since_same_role: 35, accepted_recent: 3, target: 2, consecutive: 0, availability: [], partner: false, trainer_paired: false },
+  { id: "m-lars", name: "Lars Olsen", joined_at: "2018-11-03", skill: "capable", days_since: 28, days_since_same_role: 28, accepted_recent: 4, target: 2, consecutive: 1, availability: [], partner: true, trainer_paired: false },
+  { id: "m-sofie", name: "Sofie Lund", joined_at: "2022-01-15", skill: "capable", days_since: 7, days_since_same_role: 7, accepted_recent: 8, target: 2, consecutive: 2, availability: [blocked("m-sofie", "2026-06-07", "On holiday")], partner: false, trainer_paired: false },
+  { id: "m-jonas", name: "Jonas Vik", joined_at: "2024-08-01", skill: "training", days_since: 10, days_since_same_role: null, accepted_recent: 2, target: 1, consecutive: 0, availability: [], partner: false, trainer_paired: true },
+];
+
+const BY_ID = new Map(PROFILES.map((p) => [p.id, p]));
+
+export const MEMBER_NAMES: Record<string, string> = Object.fromEntries(
+  PROFILES.map((p) => [p.id, p.name]),
+);
+
+function inputsFor(p: Profile, need: SkillLevel): ScoringInputs {
+  return {
+    candidate: {
+      member_id: p.id,
+      skill_level: p.skill,
+      accepted_recent_count: p.accepted_recent,
+      days_since_last_assignment: p.days_since,
+      days_since_last_assignment_same_role: p.days_since_same_role,
+      target_serves_per_month: p.target,
+      availability: p.availability,
+      consecutive_weeks_served: p.consecutive,
+      has_frequent_partner_on_service: p.partner,
+      has_trainer_paired: p.trainer_paired,
+    },
+    slot: { service_starts_at: SERVICE_DATE, role_skill_required: need },
+  };
+}
+
+function candidatesFor(ids: string[], need: SkillLevel) {
+  return ids.map((id) => {
+    const p = BY_ID.get(id)!;
+    return { member_id: id, joined_at: p.joined_at, inputs: inputsFor(p, need) };
+  });
+}
+
+/** Open slots to auto-fill for the upcoming service. */
+export function buildAutoFillSlots(): AutoFillSlot[] {
+  return [
+    { service_id: SERVICE_ID, role_id: "r_vocal", quantity: 1, candidates: candidatesFor(["m-maria", "m-erik", "m-jonas"], "lead") },
+    { service_id: SERVICE_ID, role_id: "r_drums", quantity: 1, candidates: candidatesFor(["m-lars", "m-sofie"], "capable") },
+    { service_id: SERVICE_ID, role_id: "r_keys", quantity: 1, candidates: candidatesFor(["m-ingrid", "m-maria"], "lead") },
+    { service_id: SERVICE_ID, role_id: "r_sound", quantity: 2, candidates: candidatesFor(["m-sofie", "m-erik", "m-lars"], "capable") },
+  ];
+}
+
+/**
+ * A schedule snapshot deliberately seeded with problems so the conflict
+ * panel has something to show: a double-book, a skill gap, a burnout run,
+ * and an under-filled slot near its deadline.
+ */
+export function buildConflictContext(): ConflictContext {
+  const sundays = ["2026-06-07", "2026-06-14", "2026-06-21", "2026-06-28"];
+  const services = sundays.map((d, i) => ({ id: `s${i}`, starts_at: new Date(`${d}T09:00:00Z`) }));
+
+  const assignments: PlacedAssignment[] = [
+    // Maria double-booked in the same service (vocal + keys)
+    { member_id: "m-maria", service_id: "s0", role_id: "r_vocal", skill_level: "lead", role_skill_required: "lead" },
+    { member_id: "m-maria", service_id: "s0", role_id: "r_keys", skill_level: "lead", role_skill_required: "lead" },
+    // Jonas (training) filling a lead-guitar slot → skill gap
+    { member_id: "m-jonas", service_id: "s0", role_id: "r_guitar", skill_level: "training", role_skill_required: "lead" },
+    // Lars on four Sundays in a row → burnout
+    ...services.map((s) => ({ member_id: "m-lars", service_id: s.id, role_id: "r_drums", skill_level: "capable" as SkillLevel, role_skill_required: "capable" as SkillLevel })),
+  ];
+
+  const members = PROFILES.map((p) => ({
+    id: p.id,
+    display_name: p.name,
+    availability: p.availability,
+    max_assignments_per_month: 3,
+  }));
+
+  return {
+    now: DEMO_NOW,
+    services,
+    members,
+    assignments,
+    // Sound needs 2 on the first service but nobody is on it yet → unfilled
+    requirements: [{ service_id: "s0", role_id: "r_sound", quantity: 2 }],
+  };
+}

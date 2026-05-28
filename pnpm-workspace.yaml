@@ -1,3 +1,9 @@
 packages:
   - "apps/*"
   - "packages/*"
+allowBuilds:
+  sharp: true
+  "@tailwindcss/oxide": true
+onlyBuiltDependencies:
+  - sharp
+  - "@tailwindcss/oxide"

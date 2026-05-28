@@ -369,7 +369,7 @@ For metrics dashboard. Combines `church.created_at`, first `member` row, first d
 - [x] Phase 1.1 — Domain model (this document)
 - [ ] Phase 1.2 — Supabase migrations + RLS
 - [ ] Phase 1.3 — Magic-link JWT auth
-- [ ] Phase 2 — Web admin shell + people/teams
+- [~] Phase 2 — Web admin — 2.1 Next.js 15 admin shell built (App Router, Tailwind v4 wired to shared tokens, dark-first, sidebar+topbar, 8 section routes, /design style guide, dashboard runs the SDK engines on mock data); 2.2 people + 2.3 teams pending (need Supabase/Docker for real data)
 - [ ] Phase 3 — Service planning + setlist
 - [~] Phase 4 — Schedule view + conflict detection — 4.2 conflict-rule engine implemented (`packages/sdk/src/conflicts.ts`, 7 of 9 rules + 19 Vitest tests; rules 5 family & 9 key-person deferred pending schema additions); 4.1 schedule view + 4.3 settings pending
 - [~] Phase 5 — AI auto-fill — 5.1 scoring engine (`scoring.ts`, 25 tests) + 5.2 orchestrator core (`autofill.ts` — deterministic fill with tiebreaker, double-book prevention, unfilled reasons; 9 tests) done; 5.2 UX + 5.3 NL tweaks pending

@@ -86,6 +86,16 @@ export async function verifyMagicLink(
   return { ok: true, claims };
 }
 
+/**
+ * SHA-256 hex of a token. The DB tracks single-use by `magic_link.token_hash`
+ * (never the raw token), so issuance stores `tokenHash(token)` and the respond
+ * path looks the row up by the same hash and flips `used_at`.
+ */
+export async function tokenHash(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", textEncoder.encode(token));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 // ── crypto + base64url helpers ───────────────────────────────────────────────
 
 function nowSeconds(): number {

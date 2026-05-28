@@ -1,0 +1,6 @@
+{
+  "imports": {
+    "@sundayplan/shared": "../../../packages/shared/src/types.ts",
+    "@sundayplan/auth": "../../../packages/auth/src/index.ts"
+  }
+}

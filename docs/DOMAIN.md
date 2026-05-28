@@ -368,7 +368,7 @@ For metrics dashboard. Combines `church.created_at`, first `member` row, first d
 - [x] Phase 0.4 — Design tokens shared (web + mobile)
 - [x] Phase 1.1 — Domain model (this document)
 - [ ] Phase 1.2 — Supabase migrations + RLS
-- [~] Phase 1.3 — Auth — magic-link JWT core done (`@sundayplan/auth`: Web Crypto HS256 sign/verify, server-only, 9 tests) + `0003` volunteer RLS (magic_link locked to service-role; `volunteer_member_id()` claim scopes assignment/availability/service/member). Planner auth (Supabase email/OAuth), the issuance Edge Function, and auth UI still pending
+- [~] Phase 1.3 — Auth — magic-link JWT core (`@sundayplan/auth`: HS256 sign/verify + `tokenHash`, server-only, 11 tests) + `0003` volunteer RLS + **issue/respond Edge Functions** (`supabase/functions/magic-link-{issue,respond}`, verified end-to-end on local stack: issue→accept→single-use→tamper-reject). Planner auth (Supabase email/OAuth) + auth UI still pending
 - [~] Phase 2 — Web admin — 2.1 shell + 2.2 people + 2.3 teams built (`apps/web`: App Router, Tailwind v4 on shared tokens, dashboard runs SDK engines on mock data, /design guide, People list+detail, Teams cards+detail with derived skill-gap insights). Persistence (real CRUD) pending — needs Supabase/Docker
 - [ ] Phase 3 — Service planning + setlist
 - [~] Phase 4 — Schedule view + conflict detection — 4.1 schedule grid built (`apps/web/app/schedule`, roles × Sundays with status pills, per-service coverage, and live detectConflicts markers/warnings on mock data) + 4.2 conflict-rule engine (`packages/sdk/src/conflicts.ts`, 7 of 9 rules + 19 Vitest tests; rules 5 family & 9 key-person deferred pending schema additions); 4.3 settings pending

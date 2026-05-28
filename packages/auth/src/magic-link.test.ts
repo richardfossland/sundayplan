@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { signMagicLink, verifyMagicLink, type IssueOptions } from "./magic-link";
+import { signMagicLink, tokenHash, verifyMagicLink, type IssueOptions } from "./magic-link";
 
 const SECRET = "test-magic-link-secret-please-rotate";
 
@@ -83,5 +83,19 @@ describe("signMagicLink / verifyMagicLink", () => {
     const res = await verifyMagicLink(token, SECRET, 1_700_000_000);
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.claims.assignment_id).toBeUndefined();
+  });
+});
+
+describe("tokenHash", () => {
+  it("computes the SHA-256 hex (matches the known vector for 'abc')", async () => {
+    expect(await tokenHash("abc")).toBe(
+      "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+    );
+  });
+
+  it("is stable and differs per token", async () => {
+    const t = await signMagicLink(opts({ jti: "j1" }), SECRET);
+    expect(await tokenHash(t)).toBe(await tokenHash(t));
+    expect(await tokenHash(t)).not.toBe(await tokenHash(`${t}x`));
   });
 });

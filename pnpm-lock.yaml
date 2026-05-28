@@ -68,6 +68,19 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  packages/auth:
+    dependencies:
+      '@sundayplan/shared':
+        specifier: workspace:*
+        version: link:../shared
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@types/node@22.19.19)(vite@8.0.14(@types/node@22.19.19)(jiti@2.7.0))
+
   packages/db: {}
 
   packages/sdk:

@@ -371,7 +371,7 @@ For metrics dashboard. Combines `church.created_at`, first `member` row, first d
 - [ ] Phase 1.3 — Magic-link JWT auth
 - [ ] Phase 2 — Web admin shell + people/teams
 - [ ] Phase 3 — Service planning + setlist
-- [ ] Phase 4 — Schedule view + conflict detection
+- [~] Phase 4 — Schedule view + conflict detection — 4.2 conflict-rule engine implemented (`packages/sdk/src/conflicts.ts`, 7 of 9 rules + 19 Vitest tests; rules 5 family & 9 key-person deferred pending schema additions); 4.1 schedule view + 4.3 settings pending
 - [~] Phase 5 — AI auto-fill — 5.1 scoring engine implemented (`packages/sdk/src/scoring.ts`) + 25 Vitest unit tests; 5.2 UX + 5.3 NL tweaks pending
 - [ ] Phase 6 — Communications infra (SMS, email, push)
 - [ ] Phase 7 — Magic-link volunteer response

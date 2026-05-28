@@ -27,6 +27,7 @@ import type {
   ScoreComponent,
   SkillLevel,
 } from "@sundayplan/shared";
+import { isUnavailable } from "@sundayplan/shared";
 
 export interface ScoringInputs {
   /** The candidate member's relevant history. */
@@ -220,31 +221,6 @@ function skillMatchRaw(have: SkillLevel, need: SkillLevel): number {
   if (n - h === 1) return 0.7; // one step under
   if (n - h === 2) return 0.4; // two steps under (training when capable needed)
   return 0;
-}
-
-function isUnavailable(
-  availabilities: Availability[],
-  serviceStartsAt: Date,
-): boolean {
-  return availabilities.some((av) => coversDate(av, serviceStartsAt));
-}
-
-function coversDate(av: Availability, date: Date): boolean {
-  const iso = date.toISOString().slice(0, 10);
-  const p = av.pattern as Record<string, unknown>;
-  if (av.kind === "specific" && Array.isArray(p.dates)) {
-    return (p.dates as string[]).includes(iso);
-  }
-  if (av.kind === "range" && typeof p.from === "string" && typeof p.to === "string") {
-    return iso >= p.from && iso <= p.to;
-  }
-  if (av.kind === "recurring" && typeof p.weekday === "string") {
-    const day = date
-      .toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" })
-      .toLowerCase();
-    return p.weekday === day;
-  }
-  return false;
 }
 
 function clamp(n: number, min: number, max: number): number {

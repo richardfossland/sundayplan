@@ -1,0 +1,27 @@
+import Link from "next/link";
+import type { TeamSummary } from "@/lib/mock";
+
+const ACCENT = {
+  gold: "var(--color-gold-400)",
+  royal: "var(--color-royal-400)",
+} as const;
+
+export function TeamCard({ team }: { team: TeamSummary }) {
+  return (
+    <Link
+      href={`/teams/${team.id}`}
+      className="group relative block overflow-hidden rounded-xl border border-white/[0.07] bg-ink-900/60 p-5 transition-colors hover:border-white/15"
+    >
+      <span className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: ACCENT[team.color] }} />
+      <div className="flex items-center gap-2.5">
+        <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: ACCENT[team.color] }} />
+        <h2 className="text-base font-semibold text-ink-50 group-hover:text-gold-200">{team.name}</h2>
+      </div>
+      <p className="mt-2 text-sm leading-relaxed text-ink-400">{team.description}</p>
+      <div className="mt-4 flex gap-4 text-xs text-ink-500">
+        <span><span className="tabular-nums text-ink-200">{team.member_count}</span> members</span>
+        <span><span className="tabular-nums text-ink-200">{team.role_count}</span> roles</span>
+      </div>
+    </Link>
+  );
+}

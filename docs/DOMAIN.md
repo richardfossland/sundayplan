@@ -369,7 +369,7 @@ For metrics dashboard. Combines `church.created_at`, first `member` row, first d
 - [x] Phase 1.1 — Domain model (this document)
 - [ ] Phase 1.2 — Supabase migrations + RLS
 - [ ] Phase 1.3 — Magic-link JWT auth
-- [~] Phase 2 — Web admin — 2.1 admin shell + 2.2 people registry built (`apps/web`: App Router, Tailwind v4 on shared tokens, dashboard runs SDK engines on mock data, /design style guide, People list + per-member detail). 2.3 teams + persistence pending (need Supabase/Docker for real data)
+- [~] Phase 2 — Web admin — 2.1 shell + 2.2 people + 2.3 teams built (`apps/web`: App Router, Tailwind v4 on shared tokens, dashboard runs SDK engines on mock data, /design guide, People list+detail, Teams cards+detail with derived skill-gap insights). Persistence (real CRUD) pending — needs Supabase/Docker
 - [ ] Phase 3 — Service planning + setlist
 - [~] Phase 4 — Schedule view + conflict detection — 4.1 schedule grid built (`apps/web/app/schedule`, roles × Sundays with status pills, per-service coverage, and live detectConflicts markers/warnings on mock data) + 4.2 conflict-rule engine (`packages/sdk/src/conflicts.ts`, 7 of 9 rules + 19 Vitest tests; rules 5 family & 9 key-person deferred pending schema additions); 4.3 settings pending
 - [~] Phase 5 — AI auto-fill — 5.1 scoring engine (`scoring.ts`, 25 tests) + 5.2 orchestrator core (`autofill.ts` — deterministic fill with tiebreaker, double-book prevention, unfilled reasons; 9 tests) done; 5.2 UX + 5.3 NL tweaks pending

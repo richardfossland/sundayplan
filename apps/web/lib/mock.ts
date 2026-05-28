@@ -264,6 +264,90 @@ export function buildPersonSchedule(id: string): PersonAssignment[] {
   }));
 }
 
+// ── Teams (Phase 2.3) ───────────────────────────────────────────────────────
+
+export interface TeamInfo {
+  id: string;
+  name: string;
+  color: "gold" | "royal";
+  description: string;
+}
+
+const TEAMS: TeamInfo[] = [
+  { id: "t_worship", name: "Worship", color: "gold", description: "Music — vocals, band, and leading the congregation." },
+  { id: "t_tech", name: "Tech", color: "royal", description: "Sound, slides, and the live stream." },
+];
+
+interface Membership {
+  team_id: string;
+  member_id: string;
+  role: string;
+  skill: SkillLevel;
+}
+
+const MEMBERSHIPS: Membership[] = [
+  { team_id: "t_worship", member_id: "m-maria", role: "Lead vocal", skill: "lead" },
+  { team_id: "t_worship", member_id: "m-erik", role: "Lead vocal", skill: "capable" },
+  { team_id: "t_worship", member_id: "m-ingrid", role: "Keys", skill: "lead" },
+  { team_id: "t_worship", member_id: "m-lars", role: "Drums", skill: "capable" },
+  { team_id: "t_worship", member_id: "m-jonas", role: "Lead guitar", skill: "training" },
+  { team_id: "t_tech", member_id: "m-sofie", role: "Sound", skill: "capable" },
+  { team_id: "t_tech", member_id: "m-lars", role: "Sound", skill: "capable" },
+  { team_id: "t_tech", member_id: "m-erik", role: "Sound", skill: "capable" },
+];
+
+export interface TeamSummary extends TeamInfo {
+  member_count: number;
+  role_count: number;
+}
+
+export function buildTeams(): TeamSummary[] {
+  return TEAMS.map((t) => {
+    const ms = MEMBERSHIPS.filter((m) => m.team_id === t.id);
+    return {
+      ...t,
+      member_count: new Set(ms.map((m) => m.member_id)).size,
+      role_count: new Set(ms.map((m) => m.role)).size,
+    };
+  });
+}
+
+export function getTeam(id: string): TeamInfo | undefined {
+  return TEAMS.find((t) => t.id === id);
+}
+
+export interface TeamRoleGroup {
+  role: string;
+  members: Array<{ id: string; name: string; skill: SkillLevel }>;
+}
+
+export function buildTeamRoles(id: string): TeamRoleGroup[] {
+  const ms = MEMBERSHIPS.filter((m) => m.team_id === id);
+  const roles = [...new Set(ms.map((m) => m.role))];
+  return roles.map((role) => ({
+    role,
+    members: ms
+      .filter((m) => m.role === role)
+      .map((m) => ({ id: m.member_id, name: MEMBER_NAMES[m.member_id] ?? m.member_id, skill: m.skill })),
+  }));
+}
+
+const HAS_LEAD: SkillLevel[] = ["lead", "trainer"];
+
+/** Derived coverage insights — single-deep roles and no-lead-cover roles. */
+export function buildTeamInsights(id: string): string[] {
+  const out: string[] = [];
+  for (const group of buildTeamRoles(id)) {
+    if (group.members.length === 1) {
+      out.push(`${group.role} has only one person — a single point of failure.`);
+    }
+    if (!group.members.some((m) => HAS_LEAD.includes(m.skill))) {
+      out.push(`${group.role} has no lead-level cover.`);
+    }
+  }
+  return out;
+}
+
 /** Conflict context for the grid — declined/removed cells are excluded. */
 export function buildScheduleConflictContext(): ConflictContext {
   const roleSkill = new Map(GRID_ROLES.map((r) => [r.id, r.skill]));

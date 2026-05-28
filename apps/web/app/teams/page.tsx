@@ -1,11 +1,17 @@
-import { PlaceholderPage } from "@/components/ui";
+import { SectionTitle } from "@/components/ui";
+import { TeamCard } from "@/components/teams";
+import { buildTeams } from "@/lib/mock";
 
-export default function Page() {
+export default function TeamsPage() {
+  const teams = buildTeams();
   return (
-    <PlaceholderPage
-      title="Teams"
-      phase="Phase 2.3"
-      blurb="Ministries, the roles within them, and each member's skill level — with coverage displays and skill-gap warnings so risky weeks surface early."
-    />
+    <div className="space-y-6">
+      <SectionTitle eyebrow="Ministries">Teams</SectionTitle>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {teams.map((t) => (
+          <TeamCard key={t.id} team={t} />
+        ))}
+      </div>
+    </div>
   );
 }

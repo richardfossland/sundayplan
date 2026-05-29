@@ -2,15 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Card, CardHeader, SectionTitle } from "@/components/ui";
 import { SkillBadge } from "@/components/people";
-import { buildTeamInsights, buildTeamRoles, getTeam } from "@/lib/mock";
+import { getTeam, getTeamRoles, teamInsights } from "@/lib/data/teams";
 
 export default async function TeamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const team = getTeam(id);
+  const team = await getTeam(id);
   if (!team) notFound();
 
-  const roles = buildTeamRoles(id);
-  const insights = buildTeamInsights(id);
+  const roles = await getTeamRoles(id);
+  const insights = teamInsights(roles);
 
   return (
     <div className="space-y-6">

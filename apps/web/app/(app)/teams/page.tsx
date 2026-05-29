@@ -1,9 +1,9 @@
 import { SectionTitle } from "@/components/ui";
 import { TeamCard } from "@/components/teams";
-import { buildTeams } from "@/lib/mock";
+import { getTeams } from "@/lib/data/teams";
 
-export default function TeamsPage() {
-  const teams = buildTeams();
+export default async function TeamsPage() {
+  const teams = await getTeams();
   return (
     <div className="space-y-6">
       <SectionTitle eyebrow="Ministries">Teams</SectionTitle>

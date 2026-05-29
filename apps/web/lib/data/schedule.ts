@@ -12,6 +12,7 @@ import {
   type ConflictContext,
   type MemberInfo,
   type PlacedAssignment,
+  type RoleRequirement,
 } from "@sundayplan/sdk";
 import type { Availability, AssignmentStatus, SkillLevel } from "@sundayplan/shared";
 import { createClient } from "@/lib/supabase/server";
@@ -73,6 +74,12 @@ function shortLabel(iso: string): string {
 interface ServiceRow {
   id: string;
   starts_at_utc: string;
+  template_id: string | null;
+}
+interface RequirementRow {
+  template_id: string;
+  role_id: string;
+  quantity: number;
 }
 interface RoleRow {
   id: string;
@@ -107,26 +114,28 @@ interface MembershipRow {
 export async function getSchedule(): Promise<ScheduleData> {
   const supabase = await createClient();
 
-  const [services, roles, assignments, members, memberships, settings] =
+  const [services, roles, assignments, members, memberships, requirements, settings] =
     await Promise.all([
-      supabase.from("service").select("id, starts_at_utc").order("starts_at_utc"),
+      supabase.from("service").select("id, starts_at_utc, template_id").order("starts_at_utc"),
       supabase.from("role").select("id, name, skill_required").order("name"),
       supabase.from("assignment").select("id, service_id, role_id, member_id, status"),
       supabase.from("member").select(
         "id, display_name, availability(id, member_id, kind, pattern, reason, reason_visibility)",
       ),
       supabase.from("team_membership").select("member_id, role_id, skill_level"),
+      supabase.from("service_team_requirement").select("template_id, role_id, quantity"),
       supabase
         .from("church_settings")
         .select("default_max_assignments_per_month")
         .maybeSingle(),
     ]);
 
-  for (const r of [services, roles, assignments, members, memberships]) {
+  for (const r of [services, roles, assignments, members, memberships, requirements]) {
     if (r.error) throw r.error;
   }
 
   const serviceRows = (services.data ?? []) as unknown as ServiceRow[];
+  const requirementRows = (requirements.data ?? []) as unknown as RequirementRow[];
   const roleRows = (roles.data ?? []) as unknown as RoleRow[];
   const assignmentRows = (assignments.data ?? []) as unknown as AssignmentRow[];
   const memberRows = (members.data ?? []) as unknown as MemberRow[];
@@ -197,6 +206,22 @@ export async function getSchedule(): Promise<ScheduleData> {
     max_assignments_per_month: maxPerMonth,
   }));
 
+  // A service inherits its required roles from its template, so the
+  // unfilled-slot rule fires for templated services whose slots are still open.
+  const reqByTemplate = new Map<string, RequirementRow[]>();
+  for (const r of requirementRows) {
+    const list = reqByTemplate.get(r.template_id) ?? [];
+    list.push(r);
+    reqByTemplate.set(r.template_id, list);
+  }
+  const serviceRequirements: RoleRequirement[] = [];
+  for (const s of serviceRows) {
+    if (!s.template_id) continue;
+    for (const req of reqByTemplate.get(s.template_id) ?? []) {
+      serviceRequirements.push({ service_id: s.id, role_id: req.role_id, quantity: req.quantity });
+    }
+  }
+
   const ctx: ConflictContext = {
     services: serviceRows.map((s) => ({
       id: s.id,
@@ -204,6 +229,7 @@ export async function getSchedule(): Promise<ScheduleData> {
     })),
     members: memberInfo,
     assignments: placed,
+    requirements: serviceRequirements,
   };
 
   return {

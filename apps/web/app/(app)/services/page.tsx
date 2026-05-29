@@ -53,6 +53,12 @@ export default async function ServicesPage() {
             {upcoming} upcoming · {services.length} total
           </span>
           <Link
+            href="/services/templates"
+            className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
+          >
+            Templates
+          </Link>
+          <Link
             href="/services/new"
             className="rounded-lg bg-gold-400 px-3 py-1.5 text-sm font-semibold text-ink-950 transition-opacity hover:opacity-90"
           >

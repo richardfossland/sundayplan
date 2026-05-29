@@ -139,6 +139,29 @@ export const ServiceItemInputSchema = z.object({
   scripture_ref: z.string().max(80).optional().nullable(),
 });
 
+// ── Service template ──────────────────────────────────────────────────────────
+
+export const ServiceTemplateInputSchema = z.object({
+  name: z.string().min(1).max(120),
+  default_duration_min: z.number().int().min(0).max(600).default(75),
+});
+
+export const TemplateItemKind = z.enum([
+  "welcome", "worship_set", "scripture", "sermon", "response", "closing", "announcement", "gap",
+]);
+
+export const TemplateItemInputSchema = z.object({
+  position: z.number().int().min(0),
+  label: z.string().min(1).max(120),
+  kind: TemplateItemKind,
+  duration_min: z.number().int().min(0).max(360).default(0),
+});
+
+export const ServiceTeamRequirementInputSchema = z.object({
+  role_id: uuid,
+  quantity: z.number().int().min(1).max(20).default(1),
+});
+
 // ── Song ────────────────────────────────────────────────────────────────────
 
 export const SongInputSchema = z.object({

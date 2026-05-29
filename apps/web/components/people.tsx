@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { PersonRow } from "@/lib/mock";
+import type { PersonRow } from "@/lib/data/people";
 import { Badge } from "@/components/ui";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

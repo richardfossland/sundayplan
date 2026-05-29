@@ -10,8 +10,6 @@
 import type {
   AssignmentStatus,
   Availability,
-  ContactChannel,
-  MemberStatus,
   SkillLevel,
 } from "@sundayplan/shared";
 import type {
@@ -217,52 +215,8 @@ export function buildScheduleGrid(): { services: GridService[]; roles: GridRole[
   };
 }
 
-const SERVICE_LABEL_BY_ID = new Map(GRID_SERVICES.map((s) => [s.id, s.label]));
-
-// ── People registry (Phase 2.2) ─────────────────────────────────────────────
-
-export interface PersonRow {
-  id: string;
-  name: string;
-  teams: string[];
-  skill: SkillLevel;
-  last_served: string | null; // ISO date
-  status: MemberStatus;
-  phone: string | null;
-  channel: ContactChannel;
-}
-
-const DIRECTORY: PersonRow[] = [
-  { id: "m-maria", name: "Maria Hansen", teams: ["Worship"], skill: "lead", last_served: "2026-05-17", status: "active", phone: "+4791000001", channel: "sms" },
-  { id: "m-ingrid", name: "Ingrid Berg", teams: ["Worship"], skill: "lead", last_served: "2026-05-24", status: "active", phone: "+4791000002", channel: "sms" },
-  { id: "m-erik", name: "Erik Dahl", teams: ["Worship", "Tech"], skill: "capable", last_served: "2026-04-26", status: "active", phone: null, channel: "email" },
-  { id: "m-lars", name: "Lars Olsen", teams: ["Worship", "Tech"], skill: "capable", last_served: "2026-05-24", status: "active", phone: "+4791000004", channel: "sms" },
-  { id: "m-sofie", name: "Sofie Lund", teams: ["Tech"], skill: "capable", last_served: "2026-05-10", status: "inactive", phone: "+4791000005", channel: "push" },
-  { id: "m-jonas", name: "Jonas Vik", teams: ["Worship"], skill: "training", last_served: "2026-05-31", status: "active", phone: "+4791000006", channel: "sms" },
-];
-
-export function buildPeople(): PersonRow[] {
-  return DIRECTORY;
-}
-
-export function getPerson(id: string): PersonRow | undefined {
-  return DIRECTORY.find((p) => p.id === id);
-}
-
-export interface PersonAssignment {
-  service_label: string;
-  role: string;
-  status: AssignmentStatus;
-}
-
-/** A member's upcoming assignments, drawn from the rota grid. */
-export function buildPersonSchedule(id: string): PersonAssignment[] {
-  return GRID_CELLS.filter((c) => c.member_id === id).map((c) => ({
-    service_label: SERVICE_LABEL_BY_ID.get(c.service_id) ?? c.service_id,
-    role: ROLE_NAMES[c.role_id] ?? c.role_id,
-    status: c.status,
-  }));
-}
+// The People registry (Phase 2.2) now reads live Supabase data via
+// lib/data/people.ts — its mock directory and helpers were removed here.
 
 // ── Teams (Phase 2.3) ───────────────────────────────────────────────────────
 

@@ -1,9 +1,9 @@
 import { SectionTitle } from "@/components/ui";
 import { PeopleTable } from "@/components/people";
-import { buildPeople } from "@/lib/mock";
+import { getPeople } from "@/lib/data/people";
 
-export default function PeoplePage() {
-  const people = buildPeople();
+export default async function PeoplePage() {
+  const people = await getPeople();
   const active = people.filter((p) => p.status === "active").length;
 
   return (

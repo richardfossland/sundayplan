@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Card, CardHeader, SectionTitle } from "@/components/ui";
 import { SkillBadge, StatusBadge, shortDate } from "@/components/people";
-import { buildPersonSchedule, getPerson } from "@/lib/mock";
+import { getPerson, getPersonSchedule } from "@/lib/data/people";
 
 const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> = {
   accepted: "success",
@@ -15,10 +15,10 @@ const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> 
 
 export default async function PersonPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const person = getPerson(id);
+  const person = await getPerson(id);
   if (!person) notFound();
 
-  const schedule = buildPersonSchedule(id);
+  const schedule = await getPersonSchedule(id);
 
   return (
     <div className="space-y-6">

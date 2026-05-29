@@ -28,10 +28,18 @@ export interface GridRole {
 }
 
 export interface GridCell {
+  assignment_id: string;
   service_id: string;
   role_id: string;
   member_id: string;
   status: AssignmentStatus;
+}
+
+/** A member eligible for a role (trained for it via a team membership). */
+export interface EligibleMember {
+  id: string;
+  name: string;
+  skill: SkillLevel;
 }
 
 export interface ScheduleData {
@@ -40,12 +48,21 @@ export interface ScheduleData {
   cells: GridCell[];
   conflicts: Conflict[];
   memberNames: Record<string, string>;
+  /** Candidate members per role id, best skill first — drives the assign picker. */
+  eligibleByRole: Record<string, EligibleMember[]>;
 }
 
 const MONTHS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
+
+const SKILL_RANK: Record<SkillLevel, number> = {
+  training: 0,
+  capable: 1,
+  lead: 2,
+  trainer: 3,
+};
 
 /** Compact column label, e.g. "7 Jun", from a UTC service start. */
 function shortLabel(iso: string): string {
@@ -63,6 +80,7 @@ interface RoleRow {
   skill_required: SkillLevel;
 }
 interface AssignmentRow {
+  id: string;
   service_id: string;
   role_id: string;
   member_id: string;
@@ -93,7 +111,7 @@ export async function getSchedule(): Promise<ScheduleData> {
     await Promise.all([
       supabase.from("service").select("id, starts_at_utc").order("starts_at_utc"),
       supabase.from("role").select("id, name, skill_required").order("name"),
-      supabase.from("assignment").select("service_id, role_id, member_id, status"),
+      supabase.from("assignment").select("id, service_id, role_id, member_id, status"),
       supabase.from("member").select(
         "id, display_name, availability(id, member_id, kind, pattern, reason, reason_visibility)",
       ),
@@ -126,6 +144,7 @@ export async function getSchedule(): Promise<ScheduleData> {
     skill: r.skill_required,
   }));
   const cells: GridCell[] = assignmentRows.map((a) => ({
+    assignment_id: a.id,
     service_id: a.service_id,
     role_id: a.role_id,
     member_id: a.member_id,
@@ -140,6 +159,22 @@ export async function getSchedule(): Promise<ScheduleData> {
   const skillByMemberRole = new Map(
     membershipRows.map((tm) => [`${tm.member_id}:${tm.role_id}`, tm.skill_level]),
   );
+
+  // Candidate pool per role = members trained for it (a team membership on the
+  // role), best skill first then name — this is what the assign picker offers.
+  const eligibleByRole: Record<string, EligibleMember[]> = {};
+  for (const tm of membershipRows) {
+    (eligibleByRole[tm.role_id] ??= []).push({
+      id: tm.member_id,
+      name: memberNames[tm.member_id] ?? tm.member_id,
+      skill: tm.skill_level,
+    });
+  }
+  for (const list of Object.values(eligibleByRole)) {
+    list.sort(
+      (a, b) => SKILL_RANK[b.skill] - SKILL_RANK[a.skill] || a.name.localeCompare(b.name),
+    );
+  }
 
   // Conflicts run only over active (not declined/removed) placements.
   const active = assignmentRows.filter(
@@ -177,5 +212,6 @@ export async function getSchedule(): Promise<ScheduleData> {
     cells,
     conflicts: detectConflicts(ctx),
     memberNames,
+    eligibleByRole,
   };
 }

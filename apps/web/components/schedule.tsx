@@ -1,16 +1,8 @@
 import type { Conflict } from "@sundayplan/sdk";
-import type { GridCell, GridRole, GridService } from "@/lib/data/schedule";
+import type { EligibleMember, GridCell, GridRole, GridService } from "@/lib/data/schedule";
+import { ScheduleCell } from "@/components/schedule-cell";
 
 type Tone = "success" | "warning" | "danger" | "neutral";
-
-const STATUS: Record<string, { tone: Tone; label: string }> = {
-  accepted: { tone: "success", label: "Accepted" },
-  pending: { tone: "warning", label: "Pending" },
-  invited: { tone: "warning", label: "Invited" },
-  no_response: { tone: "neutral", label: "No reply" },
-  declined: { tone: "danger", label: "Declined" },
-  removed: { tone: "neutral", label: "Removed" },
-};
 
 const DOT: Record<Tone, string> = {
   success: "var(--color-success)",
@@ -18,10 +10,6 @@ const DOT: Record<Tone, string> = {
   danger: "var(--color-danger)",
   neutral: "var(--color-ink-600)",
 };
-
-function firstName(name: string) {
-  return name.split(" ")[0];
-}
 
 function isActive(status: string) {
   return status === "accepted" || status === "pending" || status === "invited" || status === "no_response";
@@ -33,12 +21,14 @@ export function ScheduleGrid({
   cells,
   conflicts,
   memberNames,
+  eligibleByRole,
 }: {
   services: GridService[];
   roles: GridRole[];
   cells: GridCell[];
   conflicts: Conflict[];
   memberNames: Record<string, string>;
+  eligibleByRole: Record<string, EligibleMember[]>;
 }) {
   const cellAt = (s: string, r: string) => cells.find((c) => c.service_id === s && c.role_id === r);
 
@@ -94,33 +84,21 @@ export function ScheduleGrid({
               </td>
               {services.map((s) => {
                 const c = cellAt(s.id, role.id);
-                if (!c || c.status === "removed") {
-                  return (
-                    <td key={s.id} className="px-4 py-3 align-top">
-                      <span className="inline-flex h-7 items-center rounded-md border border-dashed border-white/10 px-2 text-xs text-ink-600">
-                        + assign
-                      </span>
-                    </td>
-                  );
-                }
-                const meta = STATUS[c.status] ?? STATUS.no_response;
-                const declined = c.status === "declined";
-                const flag = cellConflict(c);
+                const flag = c ? cellConflict(c) : null;
                 return (
                   <td key={s.id} className="px-4 py-3 align-top">
-                    <div className="flex items-center gap-2">
-                      <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: DOT[meta.tone] }} title={meta.label} />
-                      <span className={`text-ink-100 ${declined ? "text-ink-500 line-through" : ""}`}>{firstName(memberNames[c.member_id] ?? c.member_id)}</span>
-                      {flag ? (
-                        <span
-                          className="ml-0.5 text-xs leading-none"
-                          style={{ color: flag === "hard" ? "var(--color-danger)" : "var(--color-warning)" }}
-                          title={flag === "hard" ? "Hard conflict" : "Warning"}
-                        >
-                          {flag === "hard" ? "✕" : "!"}
-                        </span>
-                      ) : null}
-                    </div>
+                    <ScheduleCell
+                      serviceId={s.id}
+                      roleId={role.id}
+                      cell={
+                        c
+                          ? { assignment_id: c.assignment_id, member_id: c.member_id, status: c.status }
+                          : undefined
+                      }
+                      memberName={c ? memberNames[c.member_id] : undefined}
+                      eligible={eligibleByRole[role.id] ?? []}
+                      flag={flag}
+                    />
                   </td>
                 );
               })}

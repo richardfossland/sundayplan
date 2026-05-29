@@ -4,7 +4,8 @@ import { ScheduleGrid, ScheduleLegend } from "@/components/schedule";
 import { getSchedule } from "@/lib/data/schedule";
 
 export default async function SchedulePage() {
-  const { services, roles, cells, conflicts, memberNames } = await getSchedule();
+  const { services, roles, cells, conflicts, memberNames, eligibleByRole } =
+    await getSchedule();
   const roleNames = Object.fromEntries(roles.map((r) => [r.id, r.name]));
 
   return (
@@ -20,6 +21,7 @@ export default async function SchedulePage() {
         cells={cells}
         conflicts={conflicts}
         memberNames={memberNames}
+        eligibleByRole={eligibleByRole}
       />
 
       <ConflictPanel conflicts={conflicts} roleNames={roleNames} memberNames={memberNames} />

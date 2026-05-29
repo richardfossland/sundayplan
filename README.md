@@ -1,8 +1,10 @@
 # SundayPlan
 
+[![CI](https://github.com/richardfossland/sundayplan/actions/workflows/ci.yml/badge.svg)](https://github.com/richardfossland/sundayplan/actions/workflows/ci.yml)
+
 Church service planning + volunteer scheduling — part of the **Sunday suite** alongside [SundayRec](https://github.com/richardfossland/sundayrec) and [SundayStage](https://github.com/richardfossland/sundaystage).
 
-> ⚠️ **Status:** Phase 0–1 scaffold. Domain model designed, migrations written, shared types + Zod schemas + scoring engine in place. Web app, mobile app, and Supabase auth wiring all pending.
+> **Status (v0.1.0 — web admin, testable):** Phases 0–5 of the web admin run on live Supabase data under RLS — auth + onboarding, people, teams + roles, services + order-of-service, service templates, the song library, availability, and the schedule grid with deterministic auto-fill + live conflict detection. Mobile app + outbound comms (SMS/email/push) are still pending. See [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) to run it.
 
 ## What SundayPlan does
 
@@ -42,28 +44,46 @@ sundayplan/
 └── turbo.json
 ```
 
-## Getting started (placeholder — Phase 0 setup pending Docker)
+## Getting started
 
 ```bash
-pnpm install                # installs all workspace deps
-pnpm db:reset               # applies migrations to local Supabase (needs Docker)
-pnpm dev                    # turbo dev across apps
+colima start                          # or open Docker Desktop
+supabase start                        # local Supabase (Postgres/API/Studio)
+supabase db reset                     # apply migrations 0001..0005 + seed
+cp apps/web/.env.example apps/web/.env.local   # fill in keys from `supabase status`
+pnpm install                          # installs all workspace deps
+pnpm --filter @sundayplan/web dev     # http://localhost:3000
 ```
+
+Demo login: **`planner@alta.test` / `planner123`** (admin of the seeded church).
+Full local + hosted instructions: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ## What works today
 
-- Turborepo + pnpm-workspace plumbing
-- Domain model: Mermaid ERD covering 16 entities across 6 bounded contexts
-- Supabase migrations (`packages/db/migrations`):
-  - 0001 — tenancy (Church, ChurchMember, RLS helpers)
-  - 0002 — full core schema (member, team, role, availability, service, song,
-    setlist, assignment, magic_link, comms logs) with RLS policies on every table
-- Shared TypeScript types (`@sundayplan/shared`) — 30+ exported types
-- Zod runtime validation schemas matching the types
-- Design tokens shared between web (Tailwind) and mobile (NativeWind)
-- Deterministic auto-fill scoring engine (`@sundayplan/sdk` → `scoreCandidate()`)
-  with 7 components: skill match, rotation fairness, frequency balance, burnout,
-  pairing, variety, custom rules
+Web admin (`apps/web`) on live Supabase data, all under per-church RLS:
+
+- **Auth + onboarding** — email sign-in/up via `@supabase/ssr`, middleware
+  session gating, create-a-church onboarding for new users
+- **People** — registry + CRUD, per-member availability (recurring / range /
+  single date) feeding the scheduling engine
+- **Teams** — CRUD, roles with required skill level, member→role composition
+- **Services** — list + CRUD, order-of-service editor (add/reorder/edit/delete
+  items), assignments panel; **templates** define a default order + the roles a
+  service needs, and new services can be seeded from one
+- **Songs** — light library (metadata + file links, CCLI/TONO ids), filters,
+  service history; attachable to `song` order-of-service items
+- **Schedule** — roles × services grid, click-to-assign from the eligible pool,
+  "✨ Auto-fill gaps", and live conflict detection (double-book, unavailable,
+  skill gap, unfilled-near-deadline, …)
+
+Foundations:
+
+- Supabase migrations (`supabase/migrations`) 0001 tenancy → 0005, RLS on every
+  table (0005 closed an RLS gap on service/template item tables)
+- `@sundayplan/shared` — 30+ types + Zod schemas + design tokens
+- `@sundayplan/sdk` — deterministic scoring engine (7 components) + a 9-rule
+  conflict engine; **83 unit tests** (shared + auth + sdk)
+- `@sundayplan/auth` — magic-link JWT core + Edge Functions (issue/respond)
 
 ## TONO + CCLI first-class
 

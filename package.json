@@ -1,6 +1,6 @@
 {
   "name": "sundayplan",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Church service planning + volunteer scheduling — part of the Sunday suite",

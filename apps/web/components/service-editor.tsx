@@ -9,6 +9,7 @@ import {
   type ItemState,
 } from "@/app/(app)/services/actions";
 import type { ServiceItemRow } from "@/lib/data/services";
+import type { SongOption } from "@/lib/data/songs";
 import type { ServiceItemKind } from "@sundayplan/shared";
 
 const KINDS: { value: ServiceItemKind; label: string }[] = [
@@ -38,7 +39,7 @@ const input =
 const label = "mb-1 block text-xs font-medium text-ink-400";
 const initial: ItemState = { error: null };
 
-function ItemFields({ item }: { item?: ServiceItemRow }) {
+function ItemFields({ item, songs }: { item?: ServiceItemRow; songs: SongOption[] }) {
   const [kind, setKind] = useState<ServiceItemKind>(item?.kind ?? "welcome");
   return (
     <>
@@ -74,6 +75,23 @@ function ItemFields({ item }: { item?: ServiceItemRow }) {
           />
         </div>
       </div>
+      {kind === "song" ? (
+        <div>
+          <label className={label}>Song</label>
+          <select name="song_id" defaultValue={item?.song_id ?? ""} className={input}>
+            <option value="">— none / not in library —</option>
+            {songs.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title}
+                {s.default_key ? ` (${s.default_key})` : ""}
+              </option>
+            ))}
+          </select>
+          {songs.length === 0 ? (
+            <p className="mt-1 text-xs text-ink-600">No songs in the library yet — add some under Songs.</p>
+          ) : null}
+        </div>
+      ) : null}
       {kind === "scripture" ? (
         <div>
           <label className={label}>Scripture reference</label>
@@ -93,13 +111,13 @@ function ItemFields({ item }: { item?: ServiceItemRow }) {
   );
 }
 
-function AddItemForm({ serviceId }: { serviceId: string }) {
+function AddItemForm({ serviceId, songs }: { serviceId: string; songs: SongOption[] }) {
   const bound = addServiceItem.bind(null, serviceId);
   const [state, action, pending] = useActionState(bound, initial);
   return (
     <form action={action} className="space-y-3 rounded-xl border border-dashed border-white/10 p-4">
       <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Add to order of service</p>
-      <ItemFields />
+      <ItemFields songs={songs} />
       {state.error ? (
         <p className="text-xs text-[color:var(--color-danger)]">{state.error}</p>
       ) : null}
@@ -117,10 +135,12 @@ function AddItemForm({ serviceId }: { serviceId: string }) {
 function EditItemForm({
   serviceId,
   item,
+  songs,
   onDone,
 }: {
   serviceId: string;
   item: ServiceItemRow;
+  songs: SongOption[];
   onDone: () => void;
 }) {
   const bound = updateServiceItem.bind(null, serviceId, item.id);
@@ -134,7 +154,7 @@ function EditItemForm({
   );
   return (
     <form action={action} className="space-y-3 rounded-xl border border-gold-400/30 bg-ink-950/40 p-4">
-      <ItemFields item={item} />
+      <ItemFields item={item} songs={songs} />
       {state.error ? (
         <p className="text-xs text-[color:var(--color-danger)]">{state.error}</p>
       ) : null}
@@ -159,18 +179,22 @@ function ItemRow({
   item,
   index,
   count,
+  songs,
 }: {
   serviceId: string;
   item: ServiceItemRow;
   index: number;
   count: number;
+  songs: SongOption[];
 }) {
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
 
   if (editing) {
-    return <EditItemForm serviceId={serviceId} item={item} onDone={() => setEditing(false)} />;
+    return <EditItemForm serviceId={serviceId} item={item} songs={songs} onDone={() => setEditing(false)} />;
   }
+
+  const songTitle = item.song_id ? songs.find((s) => s.id === item.song_id)?.title : undefined;
 
   const move = (direction: "up" | "down") =>
     startTransition(() => {
@@ -211,6 +235,9 @@ function ItemRow({
             <span className="text-xs text-ink-500">{item.duration_min} min</span>
           ) : null}
         </div>
+        {songTitle ? (
+          <p className="mt-1 text-xs text-gold-300/80">♪ {songTitle}</p>
+        ) : null}
         {item.scripture_ref ? (
           <p className="mt-1 text-xs text-emerald-300/80">{item.scripture_ref}</p>
         ) : null}
@@ -231,9 +258,11 @@ function ItemRow({
 export function ServiceEditor({
   serviceId,
   items,
+  songs,
 }: {
   serviceId: string;
   items: ServiceItemRow[];
+  songs: SongOption[];
 }) {
   const total = items.reduce((sum, i) => sum + i.duration_min, 0);
   return (
@@ -244,7 +273,7 @@ export function ServiceEditor({
         </p>
       ) : (
         items.map((item, i) => (
-          <ItemRow key={item.id} serviceId={serviceId} item={item} index={i} count={items.length} />
+          <ItemRow key={item.id} serviceId={serviceId} item={item} index={i} count={items.length} songs={songs} />
         ))
       )}
       {items.length > 0 ? (
@@ -252,7 +281,7 @@ export function ServiceEditor({
           Total planned: <span className="text-ink-300">{total} min</span>
         </p>
       ) : null}
-      <AddItemForm serviceId={serviceId} />
+      <AddItemForm serviceId={serviceId} songs={songs} />
     </div>
   );
 }

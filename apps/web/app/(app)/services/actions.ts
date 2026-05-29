@@ -139,13 +139,16 @@ export async function addServiceItem(
   if (posErr) return { error: posErr.message };
   const nextPosition = (last?.position ?? -1) + 1;
 
+  const kind = formData.get("kind") ?? "welcome";
   const parsed = schemas.ServiceItemInputSchema.safeParse({
     position: nextPosition,
     label: blankToUndef(formData.get("label")) ?? "",
-    kind: formData.get("kind") ?? "welcome",
+    kind,
     duration_min: Number(formData.get("duration_min") ?? 0),
     notes: blankToUndef(formData.get("notes")),
     scripture_ref: blankToUndef(formData.get("scripture_ref")),
+    // Only a song item carries a library reference.
+    song_id: kind === "song" ? blankToUndef(formData.get("song_id")) : undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Please check the item." };
@@ -168,12 +171,14 @@ export async function updateServiceItem(
   formData: FormData,
 ): Promise<ItemState> {
   const supabase = await createClient();
+  const kind = formData.get("kind") ?? "welcome";
   const parsed = schemas.ServiceItemInputSchema.omit({ position: true }).safeParse({
     label: blankToUndef(formData.get("label")) ?? "",
-    kind: formData.get("kind") ?? "welcome",
+    kind,
     duration_min: Number(formData.get("duration_min") ?? 0),
     notes: blankToUndef(formData.get("notes")),
     scripture_ref: blankToUndef(formData.get("scripture_ref")),
+    song_id: kind === "song" ? blankToUndef(formData.get("song_id")) : undefined,
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0]?.message ?? "Please check the item." };
@@ -186,6 +191,8 @@ export async function updateServiceItem(
       duration_min: parsed.data.duration_min,
       notes: parsed.data.notes ?? null,
       scripture_ref: parsed.data.scripture_ref ?? null,
+      // Clear the song link when the item is no longer a song.
+      song_id: parsed.data.kind === "song" ? parsed.data.song_id ?? null : null,
     })
     .eq("id", itemId);
   if (error) return { error: error.message };

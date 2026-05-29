@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Badge, Card, CardHeader } from "@/components/ui";
 import { ServiceEditor } from "@/components/service-editor";
 import { getService, type ServiceAssignmentRow } from "@/lib/data/services";
+import { getSongOptions } from "@/lib/data/songs";
 import type { ServiceState } from "@sundayplan/shared";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -61,6 +62,7 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
   const { id } = await params;
   const service = await getService(id);
   if (!service) notFound();
+  const songs = await getSongOptions();
 
   return (
     <div className="space-y-6">
@@ -96,7 +98,7 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <section className="space-y-3">
           <h2 className="text-sm font-semibold tracking-tight text-ink-100">Order of service</h2>
-          <ServiceEditor serviceId={service.id} items={service.items} />
+          <ServiceEditor serviceId={service.id} items={service.items} songs={songs} />
         </section>
 
         <aside className="space-y-3">

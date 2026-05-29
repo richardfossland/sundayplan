@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Card, CardHeader, SectionTitle } from "@/components/ui";
 import { SkillBadge, StatusBadge, shortDate } from "@/components/people";
+import { AvailabilityEditor } from "@/components/availability-editor";
 import { getPerson, getPersonSchedule } from "@/lib/data/people";
+import { getMemberAvailability } from "@/lib/data/availability";
 import { setMemberStatus } from "@/app/(app)/people/actions";
 
 const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> = {
@@ -19,7 +21,10 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   const person = await getPerson(id);
   if (!person) notFound();
 
-  const schedule = await getPersonSchedule(id);
+  const [schedule, availability] = await Promise.all([
+    getPersonSchedule(id),
+    getMemberAvailability(id),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -103,6 +108,8 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
           )}
         </Card>
       </div>
+
+      <AvailabilityEditor memberId={id} rows={availability} />
     </div>
   );
 }

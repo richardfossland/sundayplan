@@ -107,6 +107,26 @@ export async function getPerson(id: string): Promise<PersonRow | null> {
   return data ? toPersonRow(data as unknown as MemberEmbed) : null;
 }
 
+export interface MemberOption {
+  id: string;
+  name: string;
+}
+
+/** Lightweight {id, name} list of active members — for pickers. */
+export async function getChurchMemberOptions(): Promise<MemberOption[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("member")
+    .select("id, display_name")
+    .eq("status", "active")
+    .order("display_name");
+  if (error) throw error;
+  return ((data ?? []) as { id: string; display_name: string }[]).map((m) => ({
+    id: m.id,
+    name: m.display_name,
+  }));
+}
+
 export interface MemberEditable {
   id: string;
   display_name: string;

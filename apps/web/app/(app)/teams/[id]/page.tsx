@@ -1,15 +1,19 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { Card, CardHeader, SectionTitle } from "@/components/ui";
-import { SkillBadge } from "@/components/people";
+import { Card, SectionTitle } from "@/components/ui";
+import { TeamComposition } from "@/components/team-composition";
 import { getTeam, getTeamRoles, teamInsights } from "@/lib/data/teams";
+import { getChurchMemberOptions } from "@/lib/data/people";
 
 export default async function TeamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const team = await getTeam(id);
   if (!team) notFound();
 
-  const roles = await getTeamRoles(id);
+  const [roles, memberOptions] = await Promise.all([
+    getTeamRoles(id),
+    getChurchMemberOptions(),
+  ]);
   const insights = teamInsights(roles);
 
   return (
@@ -44,24 +48,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
         </Card>
       ) : null}
 
-      <Card>
-        <CardHeader title="Roles" sub={`${roles.length} positions on this team`} />
-        <ul className="divide-y divide-white/[0.05]">
-          {roles.map((g) => (
-            <li key={g.role} className="px-5 py-4">
-              <div className="text-sm font-medium text-ink-100">{g.role}</div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {g.members.map((m) => (
-                  <span key={m.id} className="inline-flex items-center gap-2 rounded-full bg-white/[0.04] py-1 pl-3 pr-1.5 text-sm text-ink-200">
-                    <Link href={`/people/${m.id}`} className="hover:text-gold-300">{m.name}</Link>
-                    <SkillBadge skill={m.skill} />
-                  </span>
-                ))}
-              </div>
-            </li>
-          ))}
-        </ul>
-      </Card>
+      <TeamComposition teamId={id} roles={roles} memberOptions={memberOptions} />
     </div>
   );
 }

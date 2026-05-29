@@ -79,6 +79,7 @@ export const TeamInputSchema = z.object({
 
 export const RoleInputSchema = z.object({
   name: z.string().min(1).max(80),
+  skill_required: SkillLevel.default("capable"),
   description: z.string().max(1000).optional().nullable(),
 });
 

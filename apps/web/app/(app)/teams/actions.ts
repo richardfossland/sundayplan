@@ -65,3 +65,82 @@ export async function updateTeam(
   revalidatePath(`/teams/${id}`);
   redirect(`/teams/${id}`);
 }
+
+// ── Roles + memberships (team composition) ───────────────────────────────────
+
+export type CompositionState = { error: string | null };
+
+/** Add a role (with a minimum skill) to a team. */
+export async function createRole(
+  teamId: string,
+  _prev: CompositionState,
+  formData: FormData,
+): Promise<CompositionState> {
+  const parsed = schemas.RoleInputSchema.safeParse({
+    name: blankToUndef(formData.get("name")) ?? "",
+    skill_required: formData.get("skill_required") ?? "capable",
+  });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? "Please check the form." };
+  }
+  const supabase = await createClient();
+  // RLS (role_planner_all) checks the team belongs to the planner's church.
+  const { error } = await supabase
+    .from("role")
+    .insert({ team_id: teamId, name: parsed.data.name, skill_required: parsed.data.skill_required });
+  if (error) {
+    return { error: error.code === "23505" ? "That role already exists on this team." : error.message };
+  }
+  revalidatePath(`/teams/${teamId}`);
+  revalidatePath("/schedule");
+  return { error: null };
+}
+
+/** Assign a member to a team role (upsert on the composite key). */
+export async function addMemberToRole(
+  teamId: string,
+  roleId: string,
+  _prev: CompositionState,
+  formData: FormData,
+): Promise<CompositionState> {
+  const parsed = schemas.TeamMembershipInputSchema.safeParse({
+    team_id: teamId,
+    role_id: roleId,
+    member_id: blankToUndef(formData.get("member_id")),
+    skill_level: formData.get("skill_level") ?? "capable",
+  });
+  if (!parsed.success) {
+    return { error: "Pick a member first." };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase.from("team_membership").upsert(
+    {
+      team_id: parsed.data.team_id,
+      role_id: parsed.data.role_id,
+      member_id: parsed.data.member_id,
+      skill_level: parsed.data.skill_level,
+    },
+    { onConflict: "member_id,team_id,role_id" },
+  );
+  if (error) return { error: error.message };
+  revalidatePath(`/teams/${teamId}`);
+  revalidatePath("/schedule");
+  return { error: null };
+}
+
+/** Remove a member from a team role. */
+export async function removeMemberFromRole(
+  teamId: string,
+  roleId: string,
+  memberId: string,
+): Promise<void> {
+  const supabase = await createClient();
+  await supabase
+    .from("team_membership")
+    .delete()
+    .eq("team_id", teamId)
+    .eq("role_id", roleId)
+    .eq("member_id", memberId);
+  revalidatePath(`/teams/${teamId}`);
+  revalidatePath("/schedule");
+}

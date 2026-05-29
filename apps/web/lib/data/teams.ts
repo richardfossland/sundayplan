@@ -21,7 +21,9 @@ export interface TeamSummary extends TeamInfo {
 }
 
 export interface TeamRoleGroup {
+  id: string;
   role: string;
+  skill_required: SkillLevel;
   members: Array<{ id: string; name: string; skill: SkillLevel }>;
 }
 
@@ -65,7 +67,9 @@ export async function getTeam(id: string): Promise<TeamInfo | null> {
 }
 
 interface RoleEmbed {
+  id: string;
   name: string;
+  skill_required: SkillLevel;
   team_membership:
     | { skill_level: SkillLevel; member: { id: string; display_name: string } | null }[]
     | null;
@@ -76,12 +80,14 @@ export async function getTeamRoles(id: string): Promise<TeamRoleGroup[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("role")
-    .select("name, team_membership(skill_level, member(id, display_name))")
+    .select("id, name, skill_required, team_membership(skill_level, member(id, display_name))")
     .eq("team_id", id)
     .order("name");
   if (error) throw error;
   return ((data ?? []) as unknown as RoleEmbed[]).map((r) => ({
+    id: r.id,
     role: r.name,
+    skill_required: r.skill_required,
     members: (r.team_membership ?? [])
       .filter((tm) => tm.member)
       .map((tm) => ({

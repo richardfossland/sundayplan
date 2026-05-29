@@ -1,6 +1,7 @@
 import { SectionTitle } from "@/components/ui";
 import { ConflictPanel } from "@/components/dashboard";
 import { ScheduleGrid, ScheduleLegend } from "@/components/schedule";
+import { AutoFillButton } from "@/components/autofill-button";
 import { getSchedule } from "@/lib/data/schedule";
 
 export default async function SchedulePage() {
@@ -12,6 +13,9 @@ export default async function SchedulePage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <SectionTitle eyebrow="Upcoming services">Schedule</SectionTitle>
+        <AutoFillButton />
+      </div>
+      <div className="flex justify-end">
         <ScheduleLegend />
       </div>
 

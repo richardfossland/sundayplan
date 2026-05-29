@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { autoFill } from "@sundayplan/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/data/church";
+import { buildAutoFillSlots } from "@/lib/data/autofill";
 
 /**
  * Assign a member to a (service, role) slot. Upserts on the natural key so
@@ -36,5 +38,36 @@ export async function createAssignment(
 export async function removeAssignment(assignmentId: string): Promise<void> {
   const supabase = await createClient();
   await supabase.from("assignment").delete().eq("id", assignmentId);
+  revalidatePath("/schedule");
+}
+
+/**
+ * Auto-fill the open slots with the deterministic scoring orchestrator. Only
+ * empty cells are touched (existing assignments are left alone); proposals land
+ * as pending, created_by 'auto_fill', so the planner reviews/tweaks from there.
+ */
+export async function autoFillSchedule(): Promise<void> {
+  const churchId = await getCurrentChurchId();
+  if (!churchId) return;
+
+  const slots = await buildAutoFillSlots();
+  const { assignments } = autoFill(slots);
+  if (assignments.length === 0) {
+    revalidatePath("/schedule");
+    return;
+  }
+
+  const supabase = await createClient();
+  const rows = assignments.map((a) => ({
+    church_id: churchId,
+    service_id: a.service_id,
+    role_id: a.role_id,
+    member_id: a.member_id,
+    status: "pending",
+    created_by: "auto_fill",
+  }));
+  await supabase
+    .from("assignment")
+    .upsert(rows, { onConflict: "service_id,role_id,member_id" });
   revalidatePath("/schedule");
 }

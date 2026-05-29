@@ -18,8 +18,14 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
         <Link href="/teams" className="text-xs text-ink-500 transition-colors hover:text-gold-400">
           ← Teams
         </Link>
-        <div className="mt-2">
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
           <SectionTitle>{team.name}</SectionTitle>
+          <Link
+            href={`/teams/${id}/edit`}
+            className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
+          >
+            Edit
+          </Link>
         </div>
         <p className="mt-2 text-sm text-ink-400">{team.description}</p>
       </div>

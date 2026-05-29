@@ -7,11 +7,7 @@
  * Church: "Alta Frikirke". Upcoming service: Sunday 7 June 2026.
  */
 
-import type {
-  AssignmentStatus,
-  Availability,
-  SkillLevel,
-} from "@sundayplan/shared";
+import type { Availability, SkillLevel } from "@sundayplan/shared";
 import type {
   AutoFillSlot,
   ConflictContext,
@@ -146,100 +142,7 @@ export function buildConflictContext(): ConflictContext {
   };
 }
 
-// ── Schedule grid (Phase 4.1) ────────────────────────────────────────────────
-
-export interface GridService {
-  id: string;
-  label: string;
-}
-
-export interface GridRole {
-  id: string;
-  name: string;
-  skill: SkillLevel;
-}
-
-export interface GridCell {
-  service_id: string;
-  role_id: string;
-  member_id: string;
-  status: AssignmentStatus;
-}
-
-const GRID_SERVICES: Array<GridService & { date: string }> = [
-  { id: "g0", label: "7 Jun", date: "2026-06-07" },
-  { id: "g1", label: "14 Jun", date: "2026-06-14" },
-  { id: "g2", label: "21 Jun", date: "2026-06-21" },
-  { id: "g3", label: "28 Jun", date: "2026-06-28" },
-];
-
-export const GRID_ROLES: GridRole[] = [
-  { id: "r_vocal", name: "Lead vocal", skill: "lead" },
-  { id: "r_keys", name: "Keys", skill: "lead" },
-  { id: "r_drums", name: "Drums", skill: "capable" },
-  { id: "r_guitar", name: "Lead guitar", skill: "lead" },
-  { id: "r_sound", name: "Sound", skill: "capable" },
-];
-
-// A believable month of worship rota — with pending/declined states and a
-// couple of gaps. Lars is on every Sunday on purpose (burnout + over-cap).
-const GRID_CELLS: GridCell[] = [
-  { service_id: "g0", role_id: "r_vocal", member_id: "m-maria", status: "accepted" },
-  { service_id: "g0", role_id: "r_keys", member_id: "m-ingrid", status: "accepted" },
-  { service_id: "g0", role_id: "r_drums", member_id: "m-lars", status: "accepted" },
-  { service_id: "g0", role_id: "r_guitar", member_id: "m-jonas", status: "pending" },
-  { service_id: "g0", role_id: "r_sound", member_id: "m-sofie", status: "declined" },
-
-  { service_id: "g1", role_id: "r_vocal", member_id: "m-erik", status: "accepted" },
-  { service_id: "g1", role_id: "r_keys", member_id: "m-maria", status: "pending" },
-  { service_id: "g1", role_id: "r_drums", member_id: "m-lars", status: "accepted" },
-  { service_id: "g1", role_id: "r_sound", member_id: "m-sofie", status: "accepted" },
-
-  { service_id: "g2", role_id: "r_vocal", member_id: "m-maria", status: "accepted" },
-  { service_id: "g2", role_id: "r_keys", member_id: "m-ingrid", status: "accepted" },
-  { service_id: "g2", role_id: "r_drums", member_id: "m-lars", status: "accepted" },
-  { service_id: "g2", role_id: "r_guitar", member_id: "m-jonas", status: "accepted" },
-  { service_id: "g2", role_id: "r_sound", member_id: "m-erik", status: "pending" },
-
-  { service_id: "g3", role_id: "r_vocal", member_id: "m-ingrid", status: "accepted" },
-  { service_id: "g3", role_id: "r_drums", member_id: "m-lars", status: "accepted" },
-  { service_id: "g3", role_id: "r_guitar", member_id: "m-jonas", status: "pending" },
-  { service_id: "g3", role_id: "r_sound", member_id: "m-sofie", status: "accepted" },
-];
-
-export function buildScheduleGrid(): { services: GridService[]; roles: GridRole[]; cells: GridCell[] } {
-  return {
-    services: GRID_SERVICES.map(({ id, label }) => ({ id, label })),
-    roles: GRID_ROLES,
-    cells: GRID_CELLS,
-  };
-}
-
-// The People registry (Phase 2.2) now reads live Supabase data via
-// lib/data/people.ts — its mock directory and helpers were removed here.
-
-// Teams (Phase 2.3) now read live Supabase data via lib/data/teams.ts —
-// the mock teams + memberships were removed here.
-
-/** Conflict context for the grid — declined/removed cells are excluded. */
-export function buildScheduleConflictContext(): ConflictContext {
-  const roleSkill = new Map(GRID_ROLES.map((r) => [r.id, r.skill]));
-  const active = GRID_CELLS.filter((c) => c.status !== "declined" && c.status !== "removed");
-
-  const assignments: PlacedAssignment[] = active.map((c) => ({
-    member_id: c.member_id,
-    service_id: c.service_id,
-    role_id: c.role_id,
-    skill_level: BY_ID.get(c.member_id)!.skill,
-    role_skill_required: roleSkill.get(c.role_id)!,
-  }));
-
-  return {
-    now: DEMO_NOW,
-    services: GRID_SERVICES.map((s) => ({ id: s.id, starts_at: new Date(`${s.date}T09:00:00Z`) })),
-    members: PROFILES.map((p) => ({ id: p.id, display_name: p.name, availability: p.availability, max_assignments_per_month: 3 })),
-    assignments,
-    // The nearest service needs sound covered, but Sofie declined → unfilled
-    requirements: [{ service_id: "g0", role_id: "r_sound", quantity: 1 }],
-  };
-}
+// The People registry (2.2), Teams (2.3) and the Schedule grid (4.1) now read
+// live Supabase data via lib/data/{people,teams,schedule}.ts — their mocks were
+// removed here. What remains below is only the dashboard's SDK-engine demo,
+// which still runs autoFill/detectConflicts over crafted problem data.

@@ -1,5 +1,5 @@
 import type { Conflict } from "@sundayplan/sdk";
-import type { GridCell, GridRole, GridService } from "@/lib/mock";
+import type { GridCell, GridRole, GridService } from "@/lib/data/schedule";
 
 type Tone = "success" | "warning" | "danger" | "neutral";
 

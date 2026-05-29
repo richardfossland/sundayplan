@@ -59,3 +59,40 @@ insert into public.assignment (church_id, service_id, role_id, member_id, status
   ('c0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000002', 'a0000000-0000-4000-8000-000000000002', 'accepted', 'planner'),
   ('c0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000003', 'a0000000-0000-4000-8000-000000000004', 'accepted', 'planner'),
   ('c0000000-0000-4000-8000-000000000001', 'e0000000-0000-4000-8000-000000000001', 'd0000000-0000-4000-8000-000000000004', 'a0000000-0000-4000-8000-000000000006', 'pending',  'auto_fill');
+
+-- ── Demo planner login (local only) ─────────────────────────────────────────
+-- A confirmed email user that is admin of Alta Frikirke, so a fresh `db reset`
+-- gives a working sign-in (planner@alta.test / planner123) that sees real data.
+-- NB: the token columns must be '' (empty string), never NULL — GoTrue scans
+-- them into a Go `string`, and a NULL makes every auth query fail with
+-- "Database error querying schema" (confirmation_token scan error).
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password,
+  email_confirmed_at, created_at, updated_at,
+  raw_app_meta_data, raw_user_meta_data,
+  confirmation_token, recovery_token, email_change, email_change_token_new
+) values (
+  '00000000-0000-0000-0000-000000000000',
+  'f0000000-0000-4000-8000-000000000001',
+  'authenticated', 'authenticated', 'planner@alta.test',
+  crypt('planner123', gen_salt('bf')),
+  now(), now(), now(),
+  '{"provider":"email","providers":["email"]}', '{}',
+  '', '', '', ''
+);
+
+insert into auth.identities (
+  id, user_id, provider_id, identity_data, provider, created_at, updated_at, last_sign_in_at
+) values (
+  gen_random_uuid(),
+  'f0000000-0000-4000-8000-000000000001',
+  'f0000000-0000-4000-8000-000000000001',
+  '{"sub":"f0000000-0000-4000-8000-000000000001","email":"planner@alta.test"}',
+  'email', now(), now(), now()
+);
+
+insert into public.user_profile (id, display_name) values
+  ('f0000000-0000-4000-8000-000000000001', 'Alta Planner');
+
+insert into public.church_member (church_id, user_id, role) values
+  ('c0000000-0000-4000-8000-000000000001', 'f0000000-0000-4000-8000-000000000001', 'admin');

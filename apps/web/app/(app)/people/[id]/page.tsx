@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Badge, Card, CardHeader, SectionTitle } from "@/components/ui";
 import { SkillBadge, StatusBadge, shortDate } from "@/components/people";
 import { getPerson, getPersonSchedule } from "@/lib/data/people";
+import { setMemberStatus } from "@/app/(app)/people/actions";
 
 const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> = {
   accepted: "success",
@@ -26,11 +27,34 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
         <Link href="/people" className="text-xs text-ink-500 transition-colors hover:text-gold-400">
           ← People
         </Link>
-        <div className="mt-2 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-royal-500 to-royal-700 text-base font-semibold text-gold-200">
-            {person.name.charAt(0)}
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-royal-500 to-royal-700 text-base font-semibold text-gold-200">
+              {person.name.charAt(0)}
+            </div>
+            <SectionTitle>{person.name}</SectionTitle>
           </div>
-          <SectionTitle>{person.name}</SectionTitle>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/people/${id}/edit`}
+              className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
+            >
+              Edit
+            </Link>
+            {person.status === "archived" ? (
+              <form action={setMemberStatus.bind(null, id, "active")}>
+                <button className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-300 transition-colors hover:border-white/25">
+                  Reactivate
+                </button>
+              </form>
+            ) : (
+              <form action={setMemberStatus.bind(null, id, "archived")}>
+                <button className="rounded-lg border border-[color:var(--color-danger)]/30 px-3 py-1.5 text-sm text-[color:var(--color-danger)] transition-colors hover:border-[color:var(--color-danger)]/60">
+                  Archive
+                </button>
+              </form>
+            )}
+          </div>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <SkillBadge skill={person.skill} />

@@ -107,6 +107,30 @@ export async function getPerson(id: string): Promise<PersonRow | null> {
   return data ? toPersonRow(data as unknown as MemberEmbed) : null;
 }
 
+export interface MemberEditable {
+  id: string;
+  display_name: string;
+  phone_e164: string | null;
+  email: string | null;
+  preferred_channel: ContactChannel;
+  status: MemberStatus;
+  target_serves_per_month: number | null;
+}
+
+/** Raw editable member fields for the edit form (not the display projection). */
+export async function getMemberEditable(id: string): Promise<MemberEditable | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("member")
+    .select(
+      "id, display_name, phone_e164, email, preferred_channel, status, target_serves_per_month",
+    )
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as MemberEditable | null) ?? null;
+}
+
 interface AssignmentEmbed {
   status: AssignmentStatus;
   service: { name: string; starts_at_utc: string } | null;

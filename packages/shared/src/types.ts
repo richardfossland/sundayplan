@@ -255,6 +255,7 @@ export interface Assignment {
   score_breakdown: ScoreBreakdown | null;
   invited_at: string | null;
   responded_at: string | null;
+  response_note: string | null;
   next_reminder_at: string | null;
   created_by: AssignmentSource;
 }

@@ -499,3 +499,35 @@ handling is `apps/web/app/r/[token]/actions.ts`:
 - [ ] Phase 10 — Sunday-suite integration
 - [~] Phase 11 — Reports (TONO + CCLI licensing usage) — the differentiator landed for licensing, local-only, fully headless. SDK pure engine (`packages/sdk/src/reports.ts`, 23 tests): `filterUsagesByRange` (`[from, to)` on the local date portion), `buildTonoReport` / `buildCcliReport`, CSV serializers `tonoReportToCsv` / `ccliReportToCsv` (+ `toCsvRow`, RFC-4180 quoting), and date helpers `quarterRange` / `rangeLabel`. TONO lines keep the **streaming-vs-gathered split** (separate royalty pools) and EXCLUDE songs with no `tono_work_id`, surfacing them as `unregistered` (never silently dropped); CCLI keys off the CCLI number, no streaming concept. Shared DTOs in `types.ts` (`SongUsageRow`, `TonoReport(Line)`, `CcliReport(Line)`, `UnregisteredSongLine`) + `ReportParamsSchema` / `ReportKind` Zod. Data layer (`apps/web/lib/data/reports.ts`): `getSongUsageRows` fetches `state='played'` services in range (RLS-scoped via the cookie-bound client + `getCurrentChurchId`), then song usages from **both** `service_item.song_id` and `setlist_song` (via `setlist.service_id`), dedupes per `(service, song)`, joins `tono_work_id` / `ccli_song_id` + `was_streamed_flag`. UI (`apps/web/app/(app)/reports/page.tsx`, nav already linked): quarter-default date-range picker, TONO + CCLI tables with per-song breakdown, streaming split, totals, and an "unregistered songs" callout, each with a **Download CSV** button served by the route handler `app/reports/download/route.ts` (pure SDK serializer). Gates green: typecheck 0 errors, build 7/7, tests 160 (sdk 109, auth 27, shared 24). **Schema facts:** played songs live in BOTH `service_item.song_id` and `setlist_song` (deduped); columns are `song.tono_work_id`, `song.ccli_song_id`, `service.was_streamed_flag`, `service.state='played'`, `service.starts_at_utc` (no separate local column exists in the migrations — reported on UTC start); `setlist_song`/`service_item` have no `church_id` (scoped via parent service). **Deferred:** no migration needed (no `0008`); volunteer-balance + service-coverage reports (the other Phase-11 reporting items) and the exact official TONO/CCLI upload column templates (serializer is pure + trivially extensible); reporting on a true church-local timezone (needs a generated `starts_at_local` column). See the "Reports (Phase 11)" section below.
 - [ ] Phase 12 — Launch
+
+### 2026-05-30 — headless phases completed (local, unpushed)
+
+A pass to finish every phase that can be built + verified without real secrets,
+a device, or an LLM key — so the app is testable end to end in one sitting.
+All green: typecheck 9/9, tests 184 (sdk 133, auth 27, shared 24), web build.
+
+- **Phase 4.3 Settings** — real church + church_settings editor (profile;
+  volunteer rules incl. conflict thresholds; reminder cadence; CCLI/TONO).
+  Migration `0008` adds `unfilled_warn_days`, `max_consecutive_sundays`,
+  `single_use_response_links` to church_settings.
+- **Phase 4.2 conflict rules 5 & 9** — `family_conflict` (member.household) and
+  `key_person_unavailable` (team_membership.is_key_person), migration `0009`;
+  engine + 7 tests; schedule.ts now also feeds the engine the settings
+  thresholds. UI: Household field on the member form, ★ lead toggle on team
+  composition.
+- **Phase 4 multi-slot grid** — roles needing quantity>1 render every member +
+  an n/required counter; coverage is slot-based.
+- **Phase 2 bulk import + filters** — pure `parseMemberImport` (sdk, +8 tests:
+  delimiter/header/alias detection, NO phone normalization, dedupe, per-line
+  errors), `/people/import`, and a server-rendered people filter bar.
+- **Phase 3 holiday / calendar / setlist** — `/people/holiday` (church-wide
+  unavailability), `/services/calendar` (month grid), `/services/[id]/setlist`.
+- **Phase 11 operational reports** — volunteer-balance + service-coverage as
+  `/reports` tabs (sdk/coverage.ts, +9 tests).
+- **Phase 7 single-use links** — opt-in strict one-shot response links
+  (church setting) enforced in the respond path; reusable change-of-mind stays
+  the default.
+
+Still genuinely blocked (need a device / secrets / a model): Phase 8 native
+mobile, real message transport, Phase 9 AI planning + 5.3 NL tweaks, Phase 10
+suite bridges, real deploy, OAuth providers, and a true church-local timezone.

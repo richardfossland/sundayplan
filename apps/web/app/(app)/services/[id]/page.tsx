@@ -46,10 +46,13 @@ function AssignmentList({ assignments }: { assignments: ServiceAssignmentRow[] }
   return (
     <ul className="divide-y divide-white/[0.05]">
       {assignments.map((a) => (
-        <li key={a.id} className="flex items-center justify-between gap-3 px-5 py-3">
+        <li key={a.id} className="flex items-start justify-between gap-3 px-5 py-3">
           <div className="min-w-0">
             <p className="truncate text-sm text-ink-100">{a.member_name}</p>
             <p className="text-xs text-ink-500">{a.role_name}</p>
+            {a.response_note ? (
+              <p className="mt-1 text-xs italic text-ink-400">“{a.response_note}”</p>
+            ) : null}
           </div>
           <Badge tone={STATUS_TONE[a.status] ?? "neutral"}>{a.status.replace("_", " ")}</Badge>
         </li>

@@ -3,6 +3,14 @@ import { NextResponse, type NextRequest } from "next/server";
 
 const AUTH_PREFIXES = ["/sign-in", "/sign-up"];
 
+/**
+ * Public routes reachable WITHOUT a planner account. The magic-link volunteer
+ * response page (`/r/<token>`) is the no-account RSVP surface (Phase 7): the
+ * signed token IS the auth, so the planner-session gate must not redirect it to
+ * sign-in. Keep this list tight.
+ */
+const PUBLIC_PREFIXES = ["/r/"];
+
 /** Refresh the session cookie and gate app routes behind auth. */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -27,6 +35,10 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const path = request.nextUrl.pathname;
   const isAuthRoute = AUTH_PREFIXES.some((p) => path.startsWith(p));
+  const isPublicRoute = PUBLIC_PREFIXES.some((p) => path.startsWith(p));
+
+  // Public (no-account) routes are always allowed through.
+  if (isPublicRoute) return response;
 
   if (!user && !isAuthRoute) {
     const url = request.nextUrl.clone();

@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { mintResponseLinks, type MintedResponseLink } from "@/lib/data/magic-link";
 import {
   resolveRecipients,
   type PerRecipientValues,
@@ -78,6 +79,9 @@ export async function listComposeServices(): Promise<ComposeService[]> {
 
 export interface ServiceRecipient extends ResolvableMember {
   role_name: string;
+  /** The assignment this volunteer is responding to (for the magic link). */
+  assignment_id: string;
+  church_id: string;
 }
 
 /**
@@ -103,7 +107,7 @@ export async function getServiceRecipients(serviceId: string): Promise<{
   const { data: assignments, error: aErr } = await supabase
     .from("assignment")
     .select(
-      "member_id, role:role_id(name), member:member_id(id, display_name, phone_e164, email, preferred_channel)",
+      "id, church_id, member_id, role:role_id(name), member:member_id(id, display_name, phone_e164, email, preferred_channel)",
     )
     .eq("service_id", serviceId)
     .neq("status", "removed");
@@ -122,6 +126,8 @@ export async function getServiceRecipients(serviceId: string): Promise<{
       email: (m.email as string | null) ?? null,
       preferred_channel: (m.preferred_channel as ServiceRecipient["preferred_channel"]) ?? "sms",
       role_name: ((a.role as Record<string, unknown>)?.name as string) ?? "—",
+      assignment_id: a.id as string,
+      church_id: a.church_id as string,
     });
   }
 
@@ -132,12 +138,17 @@ export async function getServiceRecipients(serviceId: string): Promise<{
 }
 
 /**
- * Build the per-recipient template values for a service send. Phase 7 will add
- * `accept_link` / `decline_link` here (one signed magic link per recipient);
- * the renderer + resolver already accept them.
+ * Build the per-recipient template values for a service send. Phase 7: this now
+ * mints one signed magic link per recipient (reusing `@sundayplan/auth`) and
+ * fills the `accept_link` / `decline_link` template variables, so a (stubbed)
+ * send carries working, personalized no-account RSVP links.
+ *
+ * `withLinks` (default true) can be turned off for a pure render preview that
+ * doesn't need to mint tokens or touch the DB.
  */
 export async function buildRecipientValues(
   serviceId: string,
+  opts: { withLinks?: boolean } = {},
 ): Promise<{ recipients: ServiceRecipient[]; values: PerRecipientValues; service: ComposeService | null; churchName: string }> {
   const supabase = await createClient();
   const { service, recipients } = await getServiceRecipients(serviceId);
@@ -149,8 +160,20 @@ export async function buildRecipientValues(
   const serviceDate = date ? date.toISOString().slice(0, 10) : "";
   const serviceTime = date ? date.toISOString().slice(11, 16) : "";
 
+  // Mint per-recipient accept/decline links (one signed token each).
+  let links: Record<string, MintedResponseLink> = {};
+  if (opts.withLinks !== false && recipients.length > 0) {
+    const targets = recipients.map((r) => ({
+      member_id: r.member_id,
+      church_id: r.church_id,
+      assignment_id: r.assignment_id,
+    }));
+    ({ links } = await mintResponseLinks(targets));
+  }
+
   const values: PerRecipientValues = {};
   for (const r of recipients) {
+    const link = links[r.member_id];
     values[r.member_id] = {
       volunteer_name: r.display_name,
       role_name: r.role_name,
@@ -158,7 +181,9 @@ export async function buildRecipientValues(
       service_date: serviceDate,
       service_time: serviceTime,
       church_name: churchName,
-      // accept_link / decline_link — wired in Phase 7
+      ...(link
+        ? { accept_link: link.accept_link, decline_link: link.decline_link }
+        : {}),
     };
   }
 
@@ -172,7 +197,11 @@ export async function previewServiceSend(
   channel: MessageChannel | "preferred",
   subject: string | null,
 ): Promise<{ service: ComposeService | null; result: ResolveResult }> {
-  const { recipients, values, service } = await buildRecipientValues(serviceId);
+  // Preview doesn't mint tokens (no DB write / no token churn) — links show as
+  // placeholders. The real send (sendServiceMessage) mints them.
+  const { recipients, values, service } = await buildRecipientValues(serviceId, {
+    withLinks: false,
+  });
   const result = resolveRecipients(body, recipients, values, { channel, subject });
   return { service, result };
 }

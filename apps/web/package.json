@@ -13,6 +13,7 @@
     "clean": "rm -rf .next .turbo"
   },
   "dependencies": {
+    "@sundayplan/auth": "workspace:*",
     "@sundayplan/sdk": "workspace:*",
     "@sundayplan/shared": "workspace:*",
     "@supabase/ssr": "^0.10.3",

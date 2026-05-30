@@ -46,6 +46,8 @@ export interface ServiceAssignmentRow {
   member_id: string;
   member_name: string;
   status: string;
+  /** Optional note the volunteer left with their magic-link response (Phase 7). */
+  response_note: string | null;
 }
 
 export interface ServiceDetail {
@@ -184,6 +186,7 @@ export async function getService(id: string): Promise<ServiceDetail | null> {
     role_id: string;
     member_id: string;
     status: string;
+    response_note: string | null;
     role: { name: string } | null;
     member: { display_name: string } | null;
   }
@@ -198,6 +201,7 @@ export async function getService(id: string): Promise<ServiceDetail | null> {
       member_id: a.member_id,
       member_name: a.member?.display_name ?? "—",
       status: a.status,
+      response_note: a.response_note ?? null,
     }))
     .sort((a, b) => a.role_name.localeCompare(b.role_name));
 

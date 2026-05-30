@@ -33,6 +33,9 @@ importers:
 
   apps/web:
     dependencies:
+      '@sundayplan/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
       '@sundayplan/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk

@@ -362,6 +362,61 @@ For metrics dashboard. Combines `church.created_at`, first `member` row, first d
 - **`Member.user_id` is nullable.** Volunteers never need to create an account. The magic-link flow handles RSVP without auth.
 - **Soft delete via `archived_at`.** Service history must outlive an archived member.
 
+## Communications (Phase 6)
+
+The comms layer lets a planner notify/remind volunteers about their assignments
+across channels. It follows the suite's pattern: a **pure, tested engine** in
+the SDK plus a **provider boundary that stubs real transport**, so nothing needs
+secrets or hits the network to build or test.
+
+### Tables (`0006_comms.sql`)
+- **`message_template`** — reusable planner-authored templates (channel,
+  purpose, language, subject/title, body). RLS via `is_church_member()`.
+- **`message`** — one composed outbound send, optionally tied to a service.
+- **`message_delivery`** — one row per recipient: channel, normalized
+  destination, status (`queued`/`sent`/`delivered`/`failed`/`skipped`),
+  `skip_reason`, provider + provider_message_id + cost. Stores `body_hash`
+  (sha-256) not plaintext, for GDPR. A volunteer-read policy
+  (`message_delivery_volunteer_select`) is in place for Phase 7.
+
+### SDK engine (pure, deterministic)
+- `comms.ts` — `renderTemplate` (interpolate `{{var}}`, report missing +
+  unknown), `formatSms`/`formatEmail`/`formatPush` (SMS does GSM-7 vs UCS-2
+  detection + 160/153 (or 70/67) segment math), `resolveRecipients` (turns a
+  service's assignment members + per-recipient values into the concrete
+  (person, channel, rendered message) list, honouring each member's preferred
+  channel with fallback, skipping anyone with no usable channel and recording
+  why), and `dueMessages` (a deterministic cadence scheduler deciding which of
+  invite/reminder/final_reminder are due at a given `now` vs the service date).
+- `channels.ts` — the `Provider` interface (one channel each) + the default
+  `StubProvider` (records the send, returns success, **no network**) +
+  `createProvider(channel, env)` / `hasRealProvider(channel, env)`. Real
+  adapters (Twilio SMS, Resend/SMTP email, web push) are env-gated seams marked
+  in `createProvider` and intentionally unimplemented; until they exist + are
+  credentialed, the factory returns the stub. Swapping in a real provider is
+  the only change needed — no call sites move.
+
+### Web admin (`apps/web/app/(app)/messages`)
+- **Templates** — list + create/edit with a live, SDK-rendered preview
+  (incl. SMS segment count) and a variable palette.
+- **Compose** — pick a service, optionally start from a template, preview the
+  resolved recipient list (per-recipient rendered body, channel, skip reasons)
+  and send. The preview uses the SAME pure resolver the server send uses.
+- **Message history** — the per-recipient delivery log with status pills.
+- Sends run through the stub provider in `messages/actions.ts`, recording a
+  `message` + a `message_delivery` per recipient (sent/failed) and per skip.
+
+### Intentionally deferred
+- **Real provider transport** (Twilio/Resend/SMTP/web push) — gated behind the
+  `channels.ts` seam + env vars; not faked, not active in the default build.
+- **Push token registration** — needs the Phase 8 mobile app; `has_push_token`
+  is threaded through the resolver but unset, so push currently skips/falls back.
+- **Quota accounting + cron-driven reminder dispatch** — `dueMessages` is the
+  pure decision function; the scheduler/Edge Function that calls it on a timer
+  is a later step.
+- **Phase 7 magic links** — `accept_link`/`decline_link` variables are wired
+  through render + resolve but unset until Phase 7 mints per-recipient tokens.
+
 ## Phase status (May 2026)
 
 - [x] Phase 0.1 — Monorepo + Turborepo
@@ -373,8 +428,8 @@ For metrics dashboard. Combines `church.created_at`, first `member` row, first d
 - [~] Phase 3 — Service planning + setlist — 3.1 services + order-of-service editor on **live data** (`apps/web/app/(app)/services` via `lib/data/services.ts`: list with fill status, create — optionally seeded from a template — edit header, and an order-of-service editor that adds/edits/reorders/deletes `service_item`s; the detail page shows the assignments panel grouped by role with a link to the schedule grid to fill them). Migration `0005_service_item_rls` closes a real RLS gap: `service_item` / `template_item` / `service_team_requirement` were created in `0002` with **no RLS enabled** (readable + writable by any client) — now scoped through their parent's church, verified (anon blocked, planner CRUD works). 3.2 song library on **live data** (`apps/web/app/(app)/songs` via `lib/data/songs.ts`: list with title/author search + theme + language + "not used in 8+ weeks" filters, create/edit with full metadata — key, tempo, themes, CCLI + TONO ids, chord-chart + demo URLs — and a detail page with service history). "Last used" is computed from real usage (service_item + setlist_song joined to the service date), not the unmaintained `song.last_used_at` column. Songs are wired into the order-of-service editor: a `kind=song` item can attach a library song (`service_item.song_id`), which then shows on the item and feeds the song's service history. 3.1 (cont.) **template editor** on live data (`apps/web/app/(app)/services/templates` via `lib/data/templates.ts`): list, create/edit, and a per-template editor for the default order (`template_item`, keyed by its composite (template_id, position) PK — add/edit/reorder/delete) plus the roles a service needs (`service_team_requirement` — pick role + quantity, upsert/remove). Creating a service from a template already copied its items (3.1); now templates also define role requirements. Shared Zod added: ServiceTemplateInputSchema, TemplateItemInputSchema, ServiceTeamRequirementInputSchema. 3.3 **availability** (planner-side) on live data: the person page (`apps/web/app/(app)/people/[id]`) gains an unavailability editor (`components/availability-editor.tsx` + `lib/data/availability.ts` + `people/availability-actions.ts`) — add a single date, a date range, or a recurring weekday, with an optional reason + visibility; planners always see the dates, the reason is hidden unless visibility !== private. These are the SAME `availability` records the scoring engine gates on and the conflict engine's `unavailable` rule flags against, so editing them directly changes auto-fill picks and surfaces double-book-while-away warnings (path was already wired in `getSchedule`; this adds the UI to create them). Pending in 3: bulk "mark a church holiday" across members, the separate setlist view + SundayStage bridge (external API, deferred), calendar/month view
 - [~] Phase 4 — Schedule view + conflict detection — 4.1 schedule grid on **live data** (`apps/web/app/(app)/schedule` via `lib/data/schedule.ts`: roles × services with status pills, per-service coverage, and `detectConflicts()` run over real assignments — e.g. a member below a role's `skill_required` surfaces as a genuine skill_gap; migration `0004_role_skill` added that column) + 4.2 conflict-rule engine (`packages/sdk/src/conflicts.ts`, 7 of 9 rules + 19 Vitest tests; rules 5 family & 9 key-person deferred pending schema additions). **Assignment CRUD landed:** the grid's cells are interactive — assign a member from the eligible pool (trained for the role) or remove, via server actions (upsert/delete under assignment_planner_all RLS); conflicts re-run on every edit. **Unfilled-slot rule now active:** `getSchedule()` derives `RoleRequirement[]` from each templated service's `service_team_requirement` and passes it to `detectConflicts()`, so rule 7 (unfilled_near_deadline) fires for templated services with open slots inside the warn window (default 7 days). Pending: role qty>1 per cell in the grid UI + 4.3 settings
 - [~] Phase 5 — AI auto-fill — 5.1 scoring engine (`scoring.ts`, 25 tests) + 5.2 orchestrator core (`autofill.ts` — deterministic fill with tiebreaker, double-book prevention, unfilled reasons; 9 tests) + **5.2 UX wired** (`lib/data/autofill.ts` builds AutoFillSlot[] from live data → "✨ Auto-fill gaps" button on `/schedule` runs autoFill and upserts proposals as pending/auto_fill, gaps-only, planner reviews in the grid) done; 5.3 NL tweaks pending
-- [ ] Phase 6 — Communications infra (SMS, email, push)
-- [ ] Phase 7 — Magic-link volunteer response
+- [~] Phase 6 — Communications infra (SMS, email, push) — comms domain landed end-to-end with a STUB transport. Shared: `MessageTemplate` / `Message` / `MessageDelivery` types + Zod (`MessageTemplateInputSchema`, `MessageInputSchema`, `DeliveryInputSchema`, channel/purpose/status/variable enums). SDK pure engine (`comms.ts`, 29 tests): `renderTemplate` ({{var}} interpolation reporting missing/unknown), per-channel formatting (`formatSms` with GSM-7/UCS-2 segmentation, `formatEmail`, `formatPush`), `resolveRecipients` (per-recipient render + preferred-channel-with-fallback + skip reasons), and the deterministic `dueMessages` cadence scheduler (invite-immediately / reminder-days-before / day-before final, mirroring `reminder_cadence`). Provider seam (`channels.ts`, 8 tests): `Provider` interface + default `StubProvider` (records + succeeds, no network) + `createProvider`/`hasRealProvider` env-gated factory with clearly-marked Twilio/Resend/SMTP/web-push seams (NOT active by default). Migration `0006_comms.sql`: `message_template` / `message` / `message_delivery`, RLS via `is_church_member()`, GDPR `body_hash` (no plaintext on deliveries), + a Phase-7 volunteer-read policy on deliveries. Web admin (`apps/web/app/(app)/messages`): template editor with live preview, compose→preview→send (resolved recipient list + per-recipient preview, sends through the stub provider) and a delivery-log history view, wired via server actions + `lib/data/comms.ts`. **Deferred:** real provider transport (no secrets/network in the default build — the seam is the contract); push token registration (Phase 8 mobile). See the Communications section below.
+- [ ] Phase 7 — Magic-link volunteer response — clean next step: issue one signed magic link per recipient (reuse `@sundayplan/auth`), fill the `accept_link`/`decline_link` template variables in `buildRecipientValues`, and build the no-account `/r/{slug}` accept/decline page on the existing `0003` volunteer RLS + `message_delivery_volunteer_select`.
 - [ ] Phase 8 — Native mobile app
 - [ ] Phase 9 — AI service planning
 - [ ] Phase 10 — Sunday-suite integration

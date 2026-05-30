@@ -10,4 +10,5 @@ export * from "./conflicts";
 export * from "./autofill";
 export * from "./comms";
 export * from "./channels";
+export * from "./reports";
 export * from "./api";

@@ -296,3 +296,16 @@ export const DeliveryInputSchema = z.object({
   provider_message_id: z.string().max(200).optional().nullable(),
   cost_cents: z.number().int().min(0).optional().nullable(),
 });
+
+// ── Reports (Phase 11) ────────────────────────────────────────────────────────
+
+/**
+ * Params for a licensing usage report. `from` is inclusive, `to` is exclusive;
+ * both are ISO date(-time) strings. Validates the CSV-download query.
+ */
+export const ReportParamsSchema = z.object({
+  from: z.string().min(1),
+  to: z.string().min(1),
+});
+
+export const ReportKind = z.enum(["tono", "ccli"]);

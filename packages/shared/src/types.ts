@@ -405,3 +405,87 @@ export interface MessageDelivery {
   sent_at: string | null;
   created_at: string;
 }
+
+// ── Reports (Phase 11 — TONO + CCLI licensing usage) ──────────────────────────
+// The reporting domain turns played-service song usage into the two licensing
+// reports Norwegian churches must file: TONO (work id, streaming separate) and
+// CCLI (song number). The data layer produces `SongUsageRow`s; the SDK report
+// engine groups, splits streamed-vs-gathered, and serializes them. All pure.
+
+/**
+ * One normalized "a song was used in a played service" row — the input to the
+ * report engine. The data layer derives these from `service_item.song_id`
+ * and/or `setlist_song`, joined to the played service. Pure data, no DB types.
+ */
+export interface SongUsageRow {
+  songId: string;
+  title: string;
+  /** TONO work id, or null when the song is not registered with TONO. */
+  tonoWorkId: string | null;
+  /** CCLI song number (`song.ccli_song_id`), or null when unregistered. */
+  ccliNumber: string | null;
+  serviceId: string;
+  /** Service start (ISO datetime string) — the date the song was used. */
+  serviceDateLocal: string;
+  /** True when the service was streamed — TONO's separate royalty pool. */
+  wasStreamed: boolean;
+}
+
+/** Per-song breakdown line in a TONO usage report. */
+export interface TonoReportLine {
+  songId: string;
+  title: string;
+  tonoWorkId: string;
+  /** Total times played in range (gathered + streamed). */
+  totalPlays: number;
+  /** Plays in in-gathering services (was_streamed = false). */
+  gatheredPlays: number;
+  /** Plays in streamed services — TONO's separate streaming royalty pool. */
+  streamedPlays: number;
+  /** Distinct service dates (YYYY-MM-DD, ascending) the song was used. */
+  serviceDates: string[];
+}
+
+/** A song that was played but cannot be reported (no licensing id). */
+export interface UnregisteredSongLine {
+  songId: string;
+  title: string;
+  totalPlays: number;
+}
+
+export interface TonoReport {
+  from: string;
+  to: string;
+  lines: TonoReportLine[];
+  /** Played songs with no tono_work_id — flagged, never silently dropped. */
+  unregistered: UnregisteredSongLine[];
+  totals: {
+    totalPlays: number;
+    gatheredPlays: number;
+    streamedPlays: number;
+    reportableSongs: number;
+    unregisteredSongs: number;
+  };
+}
+
+/** Per-song breakdown line in a CCLI usage report. */
+export interface CcliReportLine {
+  songId: string;
+  title: string;
+  ccliNumber: string;
+  totalPlays: number;
+  serviceDates: string[];
+}
+
+export interface CcliReport {
+  from: string;
+  to: string;
+  lines: CcliReportLine[];
+  /** Played songs with no ccli number — flagged, never silently dropped. */
+  unregistered: UnregisteredSongLine[];
+  totals: {
+    totalPlays: number;
+    reportableSongs: number;
+    unregisteredSongs: number;
+  };
+}

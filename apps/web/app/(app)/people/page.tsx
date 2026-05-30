@@ -36,6 +36,12 @@ export default async function PeoplePage({
             {active} active · {filtered.length} shown · {people.length} total
           </span>
           <Link
+            href="/people/holiday"
+            className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
+          >
+            Holiday
+          </Link>
+          <Link
             href="/people/import"
             className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
           >

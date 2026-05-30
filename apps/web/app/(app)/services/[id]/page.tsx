@@ -78,12 +78,20 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
             <h1 className="text-2xl font-semibold tracking-tight text-ink-50">{service.name}</h1>
             <Badge tone={STATE_TONE[service.state]}>{service.state}</Badge>
           </div>
-          <Link
-            href={`/services/${id}/edit`}
-            className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
-          >
-            Edit
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href={`/services/${id}/setlist`}
+              className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
+            >
+              Setlist
+            </Link>
+            <Link
+              href={`/services/${id}/edit`}
+              className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
+            >
+              Edit
+            </Link>
+          </div>
         </div>
         <p className="mt-2 text-sm text-ink-400">
           {formatWhen(service.starts_at_utc)}

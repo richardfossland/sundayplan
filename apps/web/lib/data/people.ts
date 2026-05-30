@@ -17,6 +17,7 @@ export interface PersonRow {
   id: string;
   name: string;
   teams: string[];
+  tags: string[];
   skill: SkillLevel;
   last_served: string | null; // ISO date
   status: MemberStatus;
@@ -55,11 +56,12 @@ interface MemberEmbed {
   status: MemberStatus;
   phone_e164: string | null;
   preferred_channel: ContactChannel;
+  tags: string[] | null;
   team_membership: MembershipEmbed[] | null;
 }
 
 const MEMBER_SELECT =
-  "id, display_name, status, phone_e164, preferred_channel, team_membership(skill_level, team(name))";
+  "id, display_name, status, phone_e164, preferred_channel, tags, team_membership(skill_level, team(name))";
 
 function toPersonRow(m: MemberEmbed): PersonRow {
   const memberships = m.team_membership ?? [];
@@ -74,6 +76,7 @@ function toPersonRow(m: MemberEmbed): PersonRow {
     id: m.id,
     name: m.display_name,
     teams,
+    tags: m.tags ?? [],
     skill: highestSkill(memberships.map((tm) => tm.skill_level)),
     // last_served needs a past accepted assignment; all seeded services are
     // upcoming, so this stays null until the assignment history grows.

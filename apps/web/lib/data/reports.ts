@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/data/church";
 import type { SongUsageRow } from "@sundayplan/shared";
+import type { ServeRow, CoverageRow } from "@sundayplan/sdk";
 
 /**
  * Phase 11 data layer — gather licensing usage rows for the active church.
@@ -124,5 +125,133 @@ export async function getSongUsageRows(
   for (const r of items ?? []) pushUsage(r.service_id as string, r.song_id as string | null);
   for (const r of setlistUsages) pushUsage(r.service_id, r.song_id);
 
+  return rows;
+}
+
+// ── Volunteer balance ───────────────────────────────────────────────────────
+
+const ACTIVE_STATUSES = ["pending", "invited", "accepted", "no_response"];
+
+interface ServeEmbed {
+  member_id: string;
+  status: string;
+  service: { starts_at_utc: string; state: string } | null;
+  member: { display_name: string; target_serves_per_month: number | null } | null;
+}
+
+/**
+ * Committed serves in `[from, to)` — one row per active (not declined/removed)
+ * assignment on a non-archived service. RLS-scoped via the cookie-bound client.
+ */
+export async function getServeRows(from: string, to: string): Promise<ServeRow[]> {
+  const churchId = await getCurrentChurchId();
+  if (!churchId) return [];
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("assignment")
+    .select(
+      "member_id, service_id, status, service:service_id(starts_at_utc, state), member:member_id(display_name, target_serves_per_month)",
+    )
+    .eq("church_id", churchId)
+    .in("status", ACTIVE_STATUSES);
+  if (error) throw error;
+
+  const rows: ServeRow[] = [];
+  for (const a of (data ?? []) as unknown as (ServeEmbed & { service_id: string })[]) {
+    const svc = a.service;
+    if (!svc || svc.state === "archived") continue;
+    if (svc.starts_at_utc < from || svc.starts_at_utc >= to) continue;
+    rows.push({
+      memberId: a.member_id,
+      name: a.member?.display_name ?? a.member_id,
+      targetPerMonth: a.member?.target_serves_per_month ?? null,
+      serviceId: a.service_id,
+      serviceDateLocal: svc.starts_at_utc,
+    });
+  }
+  return rows;
+}
+
+// ── Service coverage ──────────────────────────────────────────────────────────
+
+interface CoverageServiceRow {
+  id: string;
+  name: string;
+  starts_at_utc: string;
+  template_id: string | null;
+}
+interface RequirementEmbed {
+  template_id: string;
+  quantity: number;
+  role: { id: string; name: string } | null;
+}
+
+/**
+ * Per-role coverage rows for templated services in `[from, to)`: required
+ * (from the template's role requirements) vs filled (active assignments).
+ */
+export async function getCoverageRows(from: string, to: string): Promise<CoverageRow[]> {
+  const churchId = await getCurrentChurchId();
+  if (!churchId) return [];
+  const supabase = await createClient();
+
+  const { data: services, error: svcErr } = await supabase
+    .from("service")
+    .select("id, name, starts_at_utc, template_id")
+    .eq("church_id", churchId)
+    .neq("state", "archived")
+    .gte("starts_at_utc", from)
+    .lt("starts_at_utc", to)
+    .order("starts_at_utc");
+  if (svcErr) throw svcErr;
+
+  const svcRows = ((services ?? []) as CoverageServiceRow[]).filter((s) => s.template_id);
+  if (svcRows.length === 0) return [];
+  const templateIds = [...new Set(svcRows.map((s) => s.template_id as string))];
+  const serviceIds = svcRows.map((s) => s.id);
+
+  const [{ data: reqs, error: reqErr }, { data: assigns, error: asgErr }] = await Promise.all([
+    supabase
+      .from("service_team_requirement")
+      .select("template_id, quantity, role:role_id(id, name)")
+      .in("template_id", templateIds),
+    supabase
+      .from("assignment")
+      .select("service_id, role_id, status")
+      .in("service_id", serviceIds)
+      .in("status", ACTIVE_STATUSES),
+  ]);
+  if (reqErr) throw reqErr;
+  if (asgErr) throw asgErr;
+
+  // filled count per (service, role)
+  const filled = new Map<string, number>();
+  for (const a of (assigns ?? []) as { service_id: string; role_id: string }[]) {
+    const key = `${a.service_id}|${a.role_id}`;
+    filled.set(key, (filled.get(key) ?? 0) + 1);
+  }
+
+  const reqByTemplate = new Map<string, RequirementEmbed[]>();
+  for (const r of (reqs ?? []) as unknown as RequirementEmbed[]) {
+    const list = reqByTemplate.get(r.template_id) ?? [];
+    list.push(r);
+    reqByTemplate.set(r.template_id, list);
+  }
+
+  const rows: CoverageRow[] = [];
+  for (const s of svcRows) {
+    for (const req of reqByTemplate.get(s.template_id as string) ?? []) {
+      if (!req.role) continue;
+      rows.push({
+        serviceId: s.id,
+        serviceName: s.name,
+        serviceDateLocal: s.starts_at_utc,
+        roleId: req.role.id,
+        roleName: req.role.name,
+        required: req.quantity,
+        filled: filled.get(`${s.id}|${req.role.id}`) ?? 0,
+      });
+    }
+  }
   return rows;
 }

@@ -2,11 +2,22 @@ import Link from "next/link";
 import {
   buildTonoReport,
   buildCcliReport,
+  buildVolunteerBalance,
+  buildServiceCoverage,
   quarterRange,
   rangeLabel,
 } from "@sundayplan/sdk";
 import { Badge, Card, SectionTitle, StatTile } from "@/components/ui";
-import { getSongUsageRows } from "@/lib/data/reports";
+import {
+  VolunteerBalanceTable,
+  ServiceCoverageTable,
+} from "@/components/reports-operational";
+import {
+  getSongUsageRows,
+  getServeRows,
+  getCoverageRows,
+} from "@/lib/data/reports";
+import { getChurchSettings } from "@/lib/data/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -17,31 +28,54 @@ function dates(list: string[]): string {
   return list.join(", ");
 }
 
+type Tab = "licensing" | "balance" | "coverage";
+const TABS: { key: Tab; label: string }[] = [
+  { key: "licensing", label: "Licensing" },
+  { key: "balance", label: "Volunteer balance" },
+  { key: "coverage", label: "Service coverage" },
+];
+
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ from?: string; to?: string }>;
+  searchParams: Promise<{ from?: string; to?: string; tab?: string }>;
 }) {
   const sp = await searchParams;
   const def = quarterRange(new Date());
   const from = sp.from || def.from;
   const to = sp.to || def.to;
+  const tab: Tab =
+    sp.tab === "balance" || sp.tab === "coverage" ? sp.tab : "licensing";
 
-  const rows = await getSongUsageRows(from, to);
-  const tono = buildTonoReport(rows, from, to);
-  const ccli = buildCcliReport(rows, from, to);
+  const tabHref = (t: Tab) => `/reports?tab=${t}&from=${from}&to=${to}`;
 
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <SectionTitle eyebrow="Licensing">Reports</SectionTitle>
-        <span className="text-sm text-ink-500">
-          {rangeLabel(from, to)} · only <strong className="text-ink-300">played</strong> services
-        </span>
+        <SectionTitle eyebrow="Insights">Reports</SectionTitle>
+        <span className="text-sm text-ink-500">{rangeLabel(from, to)}</span>
+      </div>
+
+      {/* Tab nav */}
+      <div className="flex flex-wrap gap-1 border-b border-white/[0.06]">
+        {TABS.map((t) => (
+          <Link
+            key={t.key}
+            href={tabHref(t.key)}
+            className={
+              t.key === tab
+                ? "border-b-2 border-gold-400 px-3 py-2 text-sm font-medium text-ink-50"
+                : "border-b-2 border-transparent px-3 py-2 text-sm text-ink-500 transition-colors hover:text-ink-200"
+            }
+          >
+            {t.label}
+          </Link>
+        ))}
       </div>
 
       {/* Date-range picker — GET form keeps the page server-rendered. */}
       <form method="GET" className="flex flex-wrap items-end gap-3">
+        <input type="hidden" name="tab" value={tab} />
         <label className="flex flex-col gap-1 text-xs text-ink-500">
           From (inclusive)
           <input type="date" name="from" defaultValue={from} className={input} />
@@ -56,10 +90,48 @@ export default async function ReportsPage({
         >
           Update
         </button>
-        <Link href="/reports" className="self-center text-sm text-ink-500 hover:text-ink-300">
+        <Link href={tabHref(tab)} className="self-center text-sm text-ink-500 hover:text-ink-300">
           This quarter
         </Link>
       </form>
+
+      {tab === "licensing" ? (
+        <LicensingTab from={from} to={to} />
+      ) : tab === "balance" ? (
+        <BalanceTab from={from} to={to} />
+      ) : (
+        <CoverageTab from={from} to={to} />
+      )}
+    </div>
+  );
+}
+
+async function BalanceTab({ from, to }: { from: string; to: string }) {
+  const [rows, settings] = await Promise.all([getServeRows(from, to), getChurchSettings()]);
+  const report = buildVolunteerBalance(
+    rows,
+    from,
+    to,
+    settings?.default_max_assignments_per_month ?? null,
+  );
+  return <VolunteerBalanceTable report={report} />;
+}
+
+async function CoverageTab({ from, to }: { from: string; to: string }) {
+  const rows = await getCoverageRows(from, to);
+  return <ServiceCoverageTable report={buildServiceCoverage(rows, from, to)} />;
+}
+
+async function LicensingTab({ from, to }: { from: string; to: string }) {
+  const rows = await getSongUsageRows(from, to);
+  const tono = buildTonoReport(rows, from, to);
+  const ccli = buildCcliReport(rows, from, to);
+
+  return (
+    <div className="space-y-8">
+      <p className="text-xs text-ink-500">
+        Only <strong className="text-ink-300">played</strong> services count.
+      </p>
 
       {/* ── TONO ─────────────────────────────────────────────────────────── */}
       <section className="space-y-4">
@@ -213,11 +285,6 @@ export default async function ReportsPage({
           </Card>
         )}
       </section>
-
-      <p className="text-center text-xs text-ink-600">
-        TONO + CCLI are both first-class here — usage flows straight from played services, no afterthought CSV export.
-        Mark a service <strong className="text-ink-500">played</strong> (and streamed, when relevant) so it counts.
-      </p>
     </div>
   );
 }

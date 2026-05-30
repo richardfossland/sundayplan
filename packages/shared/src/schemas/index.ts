@@ -46,6 +46,24 @@ export const ChurchSettingsInputSchema = z.object({
   tono_license_status: TonoStatus.optional(),
   tono_customer_id: z.string().optional().nullable(),
   tono_streaming_addon: z.boolean().optional(),
+  default_max_assignments_per_month: z.number().int().min(1).max(31).optional(),
+  reminder_cadence: z
+    .object({
+      days_before: z.array(z.number().int().min(0).max(60)).max(8),
+      hours_before: z.array(z.number().int().min(0).max(48)).max(8),
+    })
+    .optional(),
+  unfilled_warn_days: z.number().int().min(1).max(60).optional(),
+  max_consecutive_sundays: z.number().int().min(1).max(52).optional(),
+  auto_buy_sms_overage: z.boolean().optional(),
+});
+
+/** Church-level identity fields editable from the settings page. */
+export const ChurchProfileInputSchema = z.object({
+  name: z.string().min(2).max(120),
+  locale: localeCode,
+  timezone: z.string().min(1).max(60),
+  denomination: z.string().max(120).optional().nullable(),
 });
 
 // ── Member ──────────────────────────────────────────────────────────────────

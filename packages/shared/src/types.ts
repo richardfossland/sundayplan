@@ -44,6 +44,10 @@ export interface ChurchSettings {
   tono_streaming_addon: boolean;
   default_max_assignments_per_month: number;
   reminder_cadence: { days_before: number[]; hours_before: number[] };
+  /** Conflict-engine threshold: warn when a required slot is still unfilled within this many days of the service. */
+  unfilled_warn_days: number;
+  /** Conflict-engine threshold: warn when a member serves more than this many consecutive Sundays. */
+  max_consecutive_sundays: number;
   sms_quota_used: number;
   auto_buy_sms_overage: boolean;
   sundaystage_connected: boolean;

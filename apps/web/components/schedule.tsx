@@ -22,6 +22,7 @@ export function ScheduleGrid({
   conflicts,
   memberNames,
   eligibleByRole,
+  requiredByServiceRole,
 }: {
   services: GridService[];
   roles: GridRole[];
@@ -29,15 +30,25 @@ export function ScheduleGrid({
   conflicts: Conflict[];
   memberNames: Record<string, string>;
   eligibleByRole: Record<string, EligibleMember[]>;
+  requiredByServiceRole: Record<string, number>;
 }) {
-  const cellAt = (s: string, r: string) => cells.find((c) => c.service_id === s && c.role_id === r);
+  const cellsAt = (s: string, r: string) =>
+    cells.filter((c) => c.service_id === s && c.role_id === r);
+  const requiredFor = (s: string, r: string) => requiredByServiceRole[`${s}|${r}`] ?? 1;
 
+  // Coverage = filled slots / required slots across all roles for the service.
+  // Each role needs `required` (default 1); filled is the active count capped
+  // at the requirement so over-assigning never reads as >100%.
   const coverage = (s: string) => {
-    const filled = roles.filter((r) => {
-      const c = cellAt(s, r.id);
-      return c && isActive(c.status);
-    }).length;
-    return { filled, total: roles.length };
+    let filled = 0;
+    let total = 0;
+    for (const r of roles) {
+      const req = requiredFor(s, r.id);
+      total += req;
+      const active = cellsAt(s, r.id).filter((c) => isActive(c.status)).length;
+      filled += Math.min(active, req);
+    }
+    return { filled, total };
   };
 
   // A cell is flagged if a service-scoped conflict touches its role or member.
@@ -83,21 +94,29 @@ export function ScheduleGrid({
                 <div className="text-[0.7rem] text-ink-600">needs {role.skill}</div>
               </td>
               {services.map((s) => {
-                const c = cellAt(s.id, role.id);
-                const flag = c ? cellConflict(c) : null;
+                const placed = cellsAt(s.id, role.id).map((c) => ({
+                  assignment_id: c.assignment_id,
+                  member_id: c.member_id,
+                  status: c.status,
+                }));
                 return (
                   <td key={s.id} className="px-4 py-3 align-top">
                     <ScheduleCell
                       serviceId={s.id}
                       roleId={role.id}
-                      cell={
-                        c
-                          ? { assignment_id: c.assignment_id, member_id: c.member_id, status: c.status }
-                          : undefined
-                      }
-                      memberName={c ? memberNames[c.member_id] : undefined}
+                      placed={placed}
+                      required={requiredFor(s.id, role.id)}
+                      memberNames={memberNames}
                       eligible={eligibleByRole[role.id] ?? []}
-                      flag={flag}
+                      flagFor={(c) =>
+                        cellConflict({
+                          assignment_id: c.assignment_id,
+                          service_id: s.id,
+                          role_id: role.id,
+                          member_id: c.member_id,
+                          status: c.status,
+                        })
+                      }
                     />
                   </td>
                 );

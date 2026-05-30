@@ -52,6 +52,8 @@ export interface ScheduleData {
   memberNames: Record<string, string>;
   /** Candidate members per role id, best skill first — drives the assign picker. */
   eligibleByRole: Record<string, EligibleMember[]>;
+  /** Required slot count per `${service_id}|${role_id}` (templated services). */
+  requiredByServiceRole: Record<string, number>;
 }
 
 const MONTHS = [
@@ -248,6 +250,11 @@ export async function getSchedule(): Promise<ScheduleData> {
     config: conflictConfig,
   };
 
+  const requiredByServiceRole: Record<string, number> = {};
+  for (const req of serviceRequirements) {
+    requiredByServiceRole[`${req.service_id}|${req.role_id}`] = req.quantity;
+  }
+
   return {
     services: gridServices,
     roles: gridRoles,
@@ -255,5 +262,6 @@ export async function getSchedule(): Promise<ScheduleData> {
     conflicts: detectConflicts(ctx),
     memberNames,
     eligibleByRole,
+    requiredByServiceRole,
   };
 }

@@ -5,7 +5,7 @@ import { AutoFillButton } from "@/components/autofill-button";
 import { getSchedule } from "@/lib/data/schedule";
 
 export default async function SchedulePage() {
-  const { services, roles, cells, conflicts, memberNames, eligibleByRole } =
+  const { services, roles, cells, conflicts, memberNames, eligibleByRole, requiredByServiceRole } =
     await getSchedule();
   const roleNames = Object.fromEntries(roles.map((r) => [r.id, r.name]));
 
@@ -26,6 +26,7 @@ export default async function SchedulePage() {
         conflicts={conflicts}
         memberNames={memberNames}
         eligibleByRole={eligibleByRole}
+        requiredByServiceRole={requiredByServiceRole}
       />
 
       <ConflictPanel conflicts={conflicts} roleNames={roleNames} memberNames={memberNames} />

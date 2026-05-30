@@ -417,6 +417,70 @@ secrets or hits the network to build or test.
 - **Phase 7 magic links** — `accept_link`/`decline_link` variables are wired
   through render + resolve but unset until Phase 7 mints per-recipient tokens.
 
+## Magic-link volunteer response (Phase 7)
+
+The product's #1 promise — *volunteers never need an account* — landed end to end,
+entirely local (stub transport, no real sends). One signed link per recipient →
+tap accept/decline → done.
+
+### Token minting (reuses `@sundayplan/auth`)
+- `packages/auth/src/rsvp.ts` (pure, 16 tests) adds, on top of the existing
+  `signMagicLink` JWT: `buildResponseLinks` (token → `view`/`accept`/`decline`
+  URLs at `/r/<token>`), `parseAction` (validate `?do=`), and `applyResponse` —
+  the accept/decline **state machine** — 16 new cases (idempotent re-taps are no-ops; a
+  change-of-mind is allowed until expiry; `removed` reads as "closed"). No DB, no
+  clock, fully unit-tested.
+- `apps/web/lib/data/magic-link.ts` mints one token per (member, assignment)
+  with `signMagicLink`, records each `token_hash` in `magic_link` via the
+  service-role client (never the raw token), and returns the per-recipient URLs.
+  `buildRecipientValues` (in `lib/data/comms.ts`) now calls this and fills the
+  `accept_link` / `decline_link` template variables — closing the gap Phase 6
+  left open, so a (stubbed) send carries working personalized links. The compose
+  **preview** uses a placeholder (no token churn per keystroke); the real send
+  mints.
+
+### Response handling — Next.js server action (NOT an Edge Function)
+There is no deployed respond Edge Function in this repo (`apps/functions` holds
+only `health`), and every mutating path here is a server action. So response
+handling is `apps/web/app/r/[token]/actions.ts`:
+- `loadResponseContext(token)` verifies the JWT (signature + expiry + purpose),
+  then reads ONLY the assignment named in the verified claim.
+- `respond(token, action, note?)` re-verifies, runs the pure `applyResponse`,
+  and persists the transition (`status` + `responded_at` + optional
+  `response_note`) idempotently, then `revalidatePath`s the planner views.
+- Security: the signed token IS the authorization. We trust nothing from the URL
+  but the token; `member_id`/`church_id`/`assignment_id` all come from inside the
+  verified claim. Writes go through the service-role client scoped to those
+  claims (mirroring onboarding's no-RLS-path pattern). The `0003`/`0006`
+  volunteer RLS policies remain the documented contract for a future Supabase-JWT
+  (mobile) path; this is a lift-and-shift to a Deno Edge Function later because it
+  reuses the same `@sundayplan/auth` module.
+
+### Public page (outside planner auth)
+- `apps/web/app/r/[token]/page.tsx` + `components/rsvp-form.tsx`: a mobile-first,
+  no-account page showing church/service/date/role, with Accept / Decline + an
+  optional short note and an inline confirmation (change-of-mind supported).
+  `noindex`. Friendly errors for expired/invalid/closed links.
+- Middleware (`lib/supabase/middleware.ts`) allowlists `/r/` as a public prefix
+  so the planner-session gate never redirects volunteers to sign-in.
+
+### Schema
+- `0007_assignment_response.sql` adds `assignment.response_note` (the optional
+  note). The state transition reuses existing columns (`status`,
+  `responded_at`) and the `magic_link` table for token tracking — no new tables.
+- Planner reflection: `assignment.status` pills already render on the schedule
+  grid + service detail; the service-detail assignment list now also shows the
+  volunteer's note.
+
+### Intentionally deferred
+- **Real sends** — transport stays the Phase 6 stub (no secrets / no network).
+- **Full per-volunteer i18n** — copy is centralized + simple (no/en launch
+  languages); locale switching is a follow-up.
+- **Push token registration + cron reminder dispatch** — Phase 8 / scheduler.
+- **Strict single-use links** — tokens are deliberately reusable within the
+  expiry window to support change-of-mind; `magic_link.single_use=false` for
+  these. A one-shot variant can flip it + check `used_at`.
+
 ## Phase status (May 2026)
 
 - [x] Phase 0.1 — Monorepo + Turborepo
@@ -429,7 +493,7 @@ secrets or hits the network to build or test.
 - [~] Phase 4 — Schedule view + conflict detection — 4.1 schedule grid on **live data** (`apps/web/app/(app)/schedule` via `lib/data/schedule.ts`: roles × services with status pills, per-service coverage, and `detectConflicts()` run over real assignments — e.g. a member below a role's `skill_required` surfaces as a genuine skill_gap; migration `0004_role_skill` added that column) + 4.2 conflict-rule engine (`packages/sdk/src/conflicts.ts`, 7 of 9 rules + 19 Vitest tests; rules 5 family & 9 key-person deferred pending schema additions). **Assignment CRUD landed:** the grid's cells are interactive — assign a member from the eligible pool (trained for the role) or remove, via server actions (upsert/delete under assignment_planner_all RLS); conflicts re-run on every edit. **Unfilled-slot rule now active:** `getSchedule()` derives `RoleRequirement[]` from each templated service's `service_team_requirement` and passes it to `detectConflicts()`, so rule 7 (unfilled_near_deadline) fires for templated services with open slots inside the warn window (default 7 days). Pending: role qty>1 per cell in the grid UI + 4.3 settings
 - [~] Phase 5 — AI auto-fill — 5.1 scoring engine (`scoring.ts`, 25 tests) + 5.2 orchestrator core (`autofill.ts` — deterministic fill with tiebreaker, double-book prevention, unfilled reasons; 9 tests) + **5.2 UX wired** (`lib/data/autofill.ts` builds AutoFillSlot[] from live data → "✨ Auto-fill gaps" button on `/schedule` runs autoFill and upserts proposals as pending/auto_fill, gaps-only, planner reviews in the grid) done; 5.3 NL tweaks pending
 - [~] Phase 6 — Communications infra (SMS, email, push) — comms domain landed end-to-end with a STUB transport. Shared: `MessageTemplate` / `Message` / `MessageDelivery` types + Zod (`MessageTemplateInputSchema`, `MessageInputSchema`, `DeliveryInputSchema`, channel/purpose/status/variable enums). SDK pure engine (`comms.ts`, 29 tests): `renderTemplate` ({{var}} interpolation reporting missing/unknown), per-channel formatting (`formatSms` with GSM-7/UCS-2 segmentation, `formatEmail`, `formatPush`), `resolveRecipients` (per-recipient render + preferred-channel-with-fallback + skip reasons), and the deterministic `dueMessages` cadence scheduler (invite-immediately / reminder-days-before / day-before final, mirroring `reminder_cadence`). Provider seam (`channels.ts`, 8 tests): `Provider` interface + default `StubProvider` (records + succeeds, no network) + `createProvider`/`hasRealProvider` env-gated factory with clearly-marked Twilio/Resend/SMTP/web-push seams (NOT active by default). Migration `0006_comms.sql`: `message_template` / `message` / `message_delivery`, RLS via `is_church_member()`, GDPR `body_hash` (no plaintext on deliveries), + a Phase-7 volunteer-read policy on deliveries. Web admin (`apps/web/app/(app)/messages`): template editor with live preview, compose→preview→send (resolved recipient list + per-recipient preview, sends through the stub provider) and a delivery-log history view, wired via server actions + `lib/data/comms.ts`. **Deferred:** real provider transport (no secrets/network in the default build — the seam is the contract); push token registration (Phase 8 mobile). See the Communications section below.
-- [ ] Phase 7 — Magic-link volunteer response — clean next step: issue one signed magic link per recipient (reuse `@sundayplan/auth`), fill the `accept_link`/`decline_link` template variables in `buildRecipientValues`, and build the no-account `/r/{slug}` accept/decline page on the existing `0003` volunteer RLS + `message_delivery_volunteer_select`.
+- [x] Phase 7 — Magic-link volunteer response — the no-account RSVP loop, end to end, local-only (stub transport). Pure core in `packages/auth/src/rsvp.ts` (16 tests): `buildResponseLinks` (token → `/r/<token>` accept/decline URLs), `parseAction`, and the idempotent + change-of-mind `applyResponse` state machine. `apps/web/lib/data/magic-link.ts` mints one signed token per (member, assignment) reusing `signMagicLink`, records each `token_hash` in `magic_link` (service-role), and feeds `buildRecipientValues` so `accept_link`/`decline_link` are filled in real sends (preview uses a placeholder) — closing the Phase 6 gap. Response handling is a **Next.js server action** (`app/r/[token]/actions.ts`) — chosen over an Edge Function because none is deployed (only `health`) and every mutating path here is a server action; it verifies the JWT, applies the transition (status + responded_at + optional `response_note`) claim-scoped via the service-role client, and revalidates planner views. Public mobile-first page `app/r/[token]/page.tsx` + `components/rsvp-form.tsx`, **outside** the `(app)` group and allowlisted in middleware (`/r/`). Migration `0007_assignment_response.sql` adds `assignment.response_note`; the service-detail assignment list now surfaces the note, and existing status pills (schedule grid + service detail) reflect accept/decline. Gates: typecheck/test/build all green (auth 27 tests, sdk 86, shared 24; 137 total). Deferred: real sends (stub), full per-volunteer i18n, push tokens + reminder cron, strict single-use links. See the "Magic-link volunteer response (Phase 7)" section above.
 - [ ] Phase 8 — Native mobile app
 - [ ] Phase 9 — AI service planning
 - [ ] Phase 10 — Sunday-suite integration

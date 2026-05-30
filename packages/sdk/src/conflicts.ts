@@ -11,18 +11,20 @@
  * auto-fill UX (Phase 5.2) call. All date reasoning is UTC-based, consistent
  * with the scoring engine.
  *
- * Rules implemented (the plan's Phase 4.2 list, computable from current schema):
+ * Rules implemented (the plan's full Phase 4.2 list):
  *   1 double_booking         (hard)  — member assigned 2+ times in one service
  *   2 unavailable            (hard)  — assigned during declared unavailability
  *   3 same_day               (soft)  — assigned to 2+ services the same day
  *   4 over_max_per_month     (soft)  — exceeds the member's monthly cap
+ *   5 family_conflict        (soft)  — 2+ of one household serve the same service
  *   6 skill_gap              (soft)  — member's skill is below the role's need
  *   7 unfilled_near_deadline (soft)  — required slot still open near the date
  *   8 consecutive_sundays    (soft)  — too many Sundays in a row
+ *   9 key_person_unavailable (soft)  — every lead for a required role is away
  *
- * Deferred (need schema additions, intentionally not implemented yet):
- *   5 family_conflict         — needs a member↔member relationship field
- *   9 key_person_unavailable  — needs a "designated lead" marker per role/team
+ * Rule 5 keys off an opaque `household_id` grouping label on the member; rule 9
+ * off a `keyPersons` list (member is a designated lead for a role) — both
+ * supplied by the data layer. A rule simply no-ops when its inputs are absent.
  *
  * Rule 1's "overlapping time slots" nuance is approximated as "same service":
  * absolute item start times aren't modeled yet, so we flag any same-service
@@ -39,9 +41,11 @@ export type ConflictRule =
   | "unavailable"
   | "same_day"
   | "over_max_per_month"
+  | "family_conflict"
   | "skill_gap"
   | "unfilled_near_deadline"
-  | "consecutive_sundays";
+  | "consecutive_sundays"
+  | "key_person_unavailable";
 
 export interface Conflict {
   rule: ConflictRule;
@@ -74,6 +78,8 @@ export interface MemberInfo {
   availability: Availability[];
   /** church default unless overridden per member */
   max_assignments_per_month: number;
+  /** opaque household grouping label; members sharing it trip rule 5 */
+  household_id?: string | null;
 }
 
 /** A role requirement for a service — drives unfilled-slot detection. */
@@ -81,6 +87,12 @@ export interface RoleRequirement {
   service_id: string;
   role_id: string;
   quantity: number;
+}
+
+/** A member designated as a lead for a role — drives rule 9. */
+export interface KeyPerson {
+  member_id: string;
+  role_id: string;
 }
 
 export interface ConflictConfig {
@@ -100,6 +112,8 @@ export interface ConflictContext {
   assignments: PlacedAssignment[];
   members: MemberInfo[];
   requirements?: RoleRequirement[];
+  /** designated leads per role — supplied for rule 9 (key_person_unavailable) */
+  keyPersons?: KeyPerson[];
   config?: Partial<ConflictConfig>;
   /** "today", for deadline-based rules. Defaults to `new Date()`. */
   now?: Date;
@@ -126,9 +140,11 @@ export function detectConflicts(ctx: ConflictContext): Conflict[] {
     ...ruleUnavailable(ctx, serviceById, memberById),
     ...ruleSameDay(ctx, serviceById),
     ...ruleOverMaxPerMonth(ctx, serviceById, memberById),
+    ...ruleFamilyConflict(ctx, memberById),
     ...ruleSkillGap(ctx),
     ...ruleUnfilledNearDeadline(ctx, serviceById, now, cfg),
     ...ruleConsecutiveSundays(ctx, serviceById, cfg),
+    ...ruleKeyPersonUnavailable(ctx, serviceById, memberById),
   ];
 }
 
@@ -265,6 +281,45 @@ function ruleOverMaxPerMonth(
   return out;
 }
 
+// ── Rule 5: two of one household serve the same service (soft) ──────────────
+function ruleFamilyConflict(
+  ctx: ConflictContext,
+  memberById: Map<string, MemberInfo>,
+): Conflict[] {
+  // service → household → set of member ids assigned there
+  const byServiceHousehold = new Map<string, Map<string, Set<string>>>();
+  for (const a of ctx.assignments) {
+    const household = memberById.get(a.member_id)?.household_id;
+    if (!household) continue;
+    let households = byServiceHousehold.get(a.service_id);
+    if (!households) byServiceHousehold.set(a.service_id, (households = new Map()));
+    let members = households.get(household);
+    if (!members) households.set(household, (members = new Set()));
+    members.add(a.member_id);
+  }
+  const out: Conflict[] = [];
+  for (const [service_id, households] of byServiceHousehold) {
+    for (const members of households.values()) {
+      if (members.size < 2) continue;
+      const ids = [...members];
+      // One conflict per member so the grid can mark each cell.
+      for (const member_id of ids) {
+        const others = ids
+          .filter((id) => id !== member_id)
+          .map((id) => memberById.get(id)?.display_name ?? id);
+        out.push({
+          rule: "family_conflict",
+          severity: "soft",
+          member_id,
+          service_id,
+          message: `Same household as ${others.join(", ")}, both serving this service`,
+        });
+      }
+    }
+  }
+  return out;
+}
+
 // ── Rule 6: skill below the role's requirement (soft) ───────────────────────
 function ruleSkillGap(ctx: ConflictContext): Conflict[] {
   const out: Conflict[] = [];
@@ -340,6 +395,42 @@ function ruleConsecutiveSundays(
         severity: "soft",
         member_id,
         message: `Serving ${run} Sundays in a row (cap ${cfg.max_consecutive_sundays})`,
+      });
+    }
+  }
+  return out;
+}
+
+// ── Rule 9: every lead for a required role is unavailable (soft) ────────────
+function ruleKeyPersonUnavailable(
+  ctx: ConflictContext,
+  serviceById: Map<string, ServiceInfo>,
+  memberById: Map<string, MemberInfo>,
+): Conflict[] {
+  if (!ctx.keyPersons || ctx.keyPersons.length === 0 || !ctx.requirements) return [];
+  const keysByRole = new Map<string, string[]>();
+  for (const kp of ctx.keyPersons) {
+    const list = keysByRole.get(kp.role_id) ?? [];
+    list.push(kp.member_id);
+    keysByRole.set(kp.role_id, list);
+  }
+  const out: Conflict[] = [];
+  for (const req of ctx.requirements) {
+    const service = serviceById.get(req.service_id);
+    if (!service) continue;
+    const keys = keysByRole.get(req.role_id);
+    if (!keys || keys.length === 0) continue;
+    const anyAvailable = keys.some((id) => {
+      const m = memberById.get(id);
+      return m != null && !isUnavailable(m.availability, service.starts_at);
+    });
+    if (!anyAvailable) {
+      out.push({
+        rule: "key_person_unavailable",
+        severity: "soft",
+        service_id: req.service_id,
+        role_id: req.role_id,
+        message: `All ${keys.length} designated lead(s) for this role are unavailable on ${isoDate(service.starts_at)}`,
       });
     }
   }

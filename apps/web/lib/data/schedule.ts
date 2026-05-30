@@ -13,6 +13,7 @@ import {
   type MemberInfo,
   type PlacedAssignment,
   type RoleRequirement,
+  type KeyPerson,
 } from "@sundayplan/sdk";
 import type { Availability, AssignmentStatus, SkillLevel } from "@sundayplan/shared";
 import { createClient } from "@/lib/supabase/server";
@@ -96,12 +97,14 @@ interface AssignmentRow {
 interface MemberRow {
   id: string;
   display_name: string;
+  household: string | null;
   availability: Availability[] | null;
 }
 interface MembershipRow {
   member_id: string;
   role_id: string;
   skill_level: SkillLevel;
+  is_key_person: boolean;
 }
 
 /**
@@ -120,13 +123,13 @@ export async function getSchedule(): Promise<ScheduleData> {
       supabase.from("role").select("id, name, skill_required").order("name"),
       supabase.from("assignment").select("id, service_id, role_id, member_id, status"),
       supabase.from("member").select(
-        "id, display_name, availability(id, member_id, kind, pattern, reason, reason_visibility)",
+        "id, display_name, household, availability(id, member_id, kind, pattern, reason, reason_visibility)",
       ),
-      supabase.from("team_membership").select("member_id, role_id, skill_level"),
+      supabase.from("team_membership").select("member_id, role_id, skill_level, is_key_person"),
       supabase.from("service_team_requirement").select("template_id, role_id, quantity"),
       supabase
         .from("church_settings")
-        .select("default_max_assignments_per_month")
+        .select("default_max_assignments_per_month, unfilled_warn_days, max_consecutive_sundays")
         .maybeSingle(),
     ]);
 
@@ -142,6 +145,11 @@ export async function getSchedule(): Promise<ScheduleData> {
   const membershipRows = (memberships.data ?? []) as unknown as MembershipRow[];
   const maxPerMonth =
     (settings.data?.default_max_assignments_per_month as number | undefined) ?? 3;
+  const conflictConfig = {
+    unfilled_warn_days: (settings.data?.unfilled_warn_days as number | undefined) ?? 7,
+    max_consecutive_sundays:
+      (settings.data?.max_consecutive_sundays as number | undefined) ?? 3,
+  };
 
   const gridServices: GridService[] = serviceRows.map((s) => ({
     id: s.id,
@@ -204,7 +212,13 @@ export async function getSchedule(): Promise<ScheduleData> {
     display_name: m.display_name,
     availability: m.availability ?? [],
     max_assignments_per_month: maxPerMonth,
+    household_id: m.household,
   }));
+
+  // Designated leads per role (rule 9) — from team memberships flagged key.
+  const keyPersons: KeyPerson[] = membershipRows
+    .filter((tm) => tm.is_key_person)
+    .map((tm) => ({ member_id: tm.member_id, role_id: tm.role_id }));
 
   // A service inherits its required roles from its template, so the
   // unfilled-slot rule fires for templated services whose slots are still open.
@@ -230,6 +244,8 @@ export async function getSchedule(): Promise<ScheduleData> {
     members: memberInfo,
     assignments: placed,
     requirements: serviceRequirements,
+    keyPersons,
+    config: conflictConfig,
   };
 
   return {

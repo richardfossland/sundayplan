@@ -83,6 +83,8 @@ export const MemberInputSchema = z.object({
   notes: z.string().max(2000).optional().nullable(),
   tags: z.array(z.string().max(40)).max(32).default([]),
   target_serves_per_month: z.number().int().min(0).max(31).optional().nullable(),
+  /** Free-text household label; members sharing it trip the family conflict rule. */
+  household: z.string().max(80).optional().nullable(),
 });
 
 // ── Team / Role / Membership ────────────────────────────────────────────────
@@ -106,6 +108,7 @@ export const TeamMembershipInputSchema = z.object({
   team_id: uuid,
   role_id: uuid,
   skill_level: SkillLevel.default("capable"),
+  is_key_person: z.boolean().optional(),
   notes: z.string().max(2000).optional().nullable(),
 });
 

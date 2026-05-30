@@ -24,7 +24,7 @@ export interface TeamRoleGroup {
   id: string;
   role: string;
   skill_required: SkillLevel;
-  members: Array<{ id: string; name: string; skill: SkillLevel }>;
+  members: Array<{ id: string; name: string; skill: SkillLevel; is_key_person: boolean }>;
 }
 
 interface TeamListEmbed extends TeamInfo {
@@ -71,7 +71,11 @@ interface RoleEmbed {
   name: string;
   skill_required: SkillLevel;
   team_membership:
-    | { skill_level: SkillLevel; member: { id: string; display_name: string } | null }[]
+    | {
+        skill_level: SkillLevel;
+        is_key_person: boolean;
+        member: { id: string; display_name: string } | null;
+      }[]
     | null;
 }
 
@@ -80,7 +84,9 @@ export async function getTeamRoles(id: string): Promise<TeamRoleGroup[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("role")
-    .select("id, name, skill_required, team_membership(skill_level, member(id, display_name))")
+    .select(
+      "id, name, skill_required, team_membership(skill_level, is_key_person, member(id, display_name))",
+    )
     .eq("team_id", id)
     .order("name");
   if (error) throw error;
@@ -94,6 +100,7 @@ export async function getTeamRoles(id: string): Promise<TeamRoleGroup[]> {
         id: tm.member!.id,
         name: tm.member!.display_name,
         skill: tm.skill_level,
+        is_key_person: tm.is_key_person ?? false,
       })),
   }));
 }

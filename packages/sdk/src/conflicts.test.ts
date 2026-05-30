@@ -118,6 +118,57 @@ describe("rule 4 — over the monthly cap (soft)", () => {
   });
 });
 
+describe("rule 5 — family conflict (soft)", () => {
+  it("flags two members of the same household in one service", () => {
+    const ctx: ConflictContext = {
+      services: [svc("s1", SUN[0])],
+      members: [
+        member("m1", { display_name: "Ada", household_id: "hansen" }),
+        member("m2", { display_name: "Bo", household_id: "hansen" }),
+      ],
+      assignments: [asg("m1", "s1", "r1"), asg("m2", "s1", "r2")],
+    };
+    const hits = only("family_conflict", detectConflicts(ctx));
+    // one conflict per member, each naming the other
+    expect(hits).toHaveLength(2);
+    expect(hits.map((h) => h.member_id).sort()).toEqual(["m1", "m2"]);
+    expect(hits.find((h) => h.member_id === "m1")?.message).toMatch(/Bo/);
+  });
+
+  it("does not flag members of different households", () => {
+    const ctx: ConflictContext = {
+      services: [svc("s1", SUN[0])],
+      members: [
+        member("m1", { household_id: "hansen" }),
+        member("m2", { household_id: "olsen" }),
+      ],
+      assignments: [asg("m1", "s1", "r1"), asg("m2", "s1", "r2")],
+    };
+    expect(only("family_conflict", detectConflicts(ctx))).toHaveLength(0);
+  });
+
+  it("does not flag the same household across different services", () => {
+    const ctx: ConflictContext = {
+      services: [svc("s1", SUN[0]), svc("s2", SUN[1])],
+      members: [
+        member("m1", { household_id: "hansen" }),
+        member("m2", { household_id: "hansen" }),
+      ],
+      assignments: [asg("m1", "s1", "r1"), asg("m2", "s2", "r1")],
+    };
+    expect(only("family_conflict", detectConflicts(ctx))).toHaveLength(0);
+  });
+
+  it("ignores members with no household label", () => {
+    const ctx: ConflictContext = {
+      services: [svc("s1", SUN[0])],
+      members: [member("m1"), member("m2")],
+      assignments: [asg("m1", "s1", "r1"), asg("m2", "s1", "r2")],
+    };
+    expect(only("family_conflict", detectConflicts(ctx))).toHaveLength(0);
+  });
+});
+
 describe("rule 6 — skill gap (soft)", () => {
   it("flags a member below the role's required skill", () => {
     const ctx: ConflictContext = {
@@ -206,6 +257,49 @@ describe("rule 8 — consecutive Sundays (soft)", () => {
       assignments: [asg("m1", "s0", "r1"), asg("m1", "s2", "r1"), asg("m1", "s3", "r1")],
     };
     expect(only("consecutive_sundays", detectConflicts(ctx))).toHaveLength(0);
+  });
+});
+
+describe("rule 9 — key person unavailable (soft)", () => {
+  it("flags a required role whose only lead is unavailable", () => {
+    const ctx: ConflictContext = {
+      services: [svc("s1", SUN[0])],
+      members: [member("m1", { availability: [specific([SUN[0]])] })],
+      assignments: [],
+      requirements: [{ service_id: "s1", role_id: "r1", quantity: 1 }],
+      keyPersons: [{ member_id: "m1", role_id: "r1" }],
+    };
+    const hits = only("key_person_unavailable", detectConflicts(ctx));
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ severity: "soft", service_id: "s1", role_id: "r1" });
+  });
+
+  it("does not flag when at least one lead is available", () => {
+    const ctx: ConflictContext = {
+      services: [svc("s1", SUN[0])],
+      members: [
+        member("m1", { availability: [specific([SUN[0]])] }),
+        member("m2"), // available
+      ],
+      assignments: [],
+      requirements: [{ service_id: "s1", role_id: "r1", quantity: 1 }],
+      keyPersons: [
+        { member_id: "m1", role_id: "r1" },
+        { member_id: "m2", role_id: "r1" },
+      ],
+    };
+    expect(only("key_person_unavailable", detectConflicts(ctx))).toHaveLength(0);
+  });
+
+  it("no-ops when the role has no designated leads", () => {
+    const ctx: ConflictContext = {
+      services: [svc("s1", SUN[0])],
+      members: [member("m1", { availability: [specific([SUN[0]])] })],
+      assignments: [],
+      requirements: [{ service_id: "s1", role_id: "r1", quantity: 1 }],
+      keyPersons: [{ member_id: "m1", role_id: "r2" }], // lead for a different role
+    };
+    expect(only("key_person_unavailable", detectConflicts(ctx))).toHaveLength(0);
   });
 });
 

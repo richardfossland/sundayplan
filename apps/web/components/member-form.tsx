@@ -71,17 +71,28 @@ function MemberFields({ member }: { member?: MemberEditable }) {
           </select>
         </div>
       </div>
-      <div>
-        <label className={label}>Target serves / month</label>
-        <input
-          name="target_serves_per_month"
-          type="number"
-          min={0}
-          max={31}
-          defaultValue={member?.target_serves_per_month ?? ""}
-          placeholder="e.g. 2"
-          className={input}
-        />
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={label}>Target serves / month</label>
+          <input
+            name="target_serves_per_month"
+            type="number"
+            min={0}
+            max={31}
+            defaultValue={member?.target_serves_per_month ?? ""}
+            placeholder="e.g. 2"
+            className={input}
+          />
+        </div>
+        <div>
+          <label className={label}>Household</label>
+          <input
+            name="household"
+            defaultValue={member?.household ?? ""}
+            placeholder="e.g. Hansen"
+            className={input}
+          />
+        </div>
       </div>
     </>
   );

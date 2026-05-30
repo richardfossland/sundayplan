@@ -7,6 +7,7 @@ import {
   addMemberToRole,
   createRole,
   removeMemberFromRole,
+  setKeyPerson,
   type CompositionState,
 } from "@/app/(app)/teams/actions";
 import type { TeamRoleGroup } from "@/lib/data/teams";
@@ -58,6 +59,10 @@ function AddMemberRow({
           </option>
         ))}
       </select>
+      <label className="inline-flex items-center gap-1.5 text-xs text-ink-400" title="Designated lead for this role">
+        <input type="checkbox" name="is_key_person" className="h-3.5 w-3.5 rounded border-white/20 bg-ink-950 text-gold-400" />
+        Lead
+      </label>
       <button type="submit" disabled={pending} className={ghostBtn}>
         {pending ? "Adding…" : "Add"}
       </button>
@@ -99,6 +104,21 @@ function RoleBlock({
                 {m.name}
               </Link>
               <SkillBadge skill={m.skill} />
+              <button
+                onClick={() =>
+                  startTransition(() => setKeyPerson(teamId, role.id, m.id, !m.is_key_person))
+                }
+                disabled={pending}
+                aria-label={`${m.is_key_person ? "Unset" : "Set"} ${m.name} as a lead for ${role.role}`}
+                title={m.is_key_person ? "Designated lead — click to unset" : "Mark as designated lead"}
+                className={
+                  m.is_key_person
+                    ? "text-gold-300 transition-colors disabled:opacity-40"
+                    : "text-ink-700 transition-colors hover:text-gold-300 disabled:opacity-40"
+                }
+              >
+                {m.is_key_person ? "★" : "☆"}
+              </button>
               <button
                 onClick={() =>
                   startTransition(() => removeMemberFromRole(teamId, role.id, m.id))

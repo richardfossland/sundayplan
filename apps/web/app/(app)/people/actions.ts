@@ -23,6 +23,7 @@ function parseMemberForm(formData: FormData) {
     preferred_channel: formData.get("preferred_channel") ?? "sms",
     status: formData.get("status") ?? "active",
     target_serves_per_month: target === undefined ? undefined : Number(target),
+    household: blankToUndef(formData.get("household")) ?? null,
   });
 }
 

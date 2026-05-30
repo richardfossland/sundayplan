@@ -108,6 +108,7 @@ export async function addMemberToRole(
     role_id: roleId,
     member_id: blankToUndef(formData.get("member_id")),
     skill_level: formData.get("skill_level") ?? "capable",
+    is_key_person: formData.get("is_key_person") === "on",
   });
   if (!parsed.success) {
     return { error: "Pick a member first." };
@@ -119,6 +120,7 @@ export async function addMemberToRole(
       role_id: parsed.data.role_id,
       member_id: parsed.data.member_id,
       skill_level: parsed.data.skill_level,
+      is_key_person: parsed.data.is_key_person ?? false,
     },
     { onConflict: "member_id,team_id,role_id" },
   );
@@ -126,6 +128,24 @@ export async function addMemberToRole(
   revalidatePath(`/teams/${teamId}`);
   revalidatePath("/schedule");
   return { error: null };
+}
+
+/** Flip a member's designated-lead (key person) flag for a role. */
+export async function setKeyPerson(
+  teamId: string,
+  roleId: string,
+  memberId: string,
+  isKey: boolean,
+): Promise<void> {
+  const supabase = await createClient();
+  await supabase
+    .from("team_membership")
+    .update({ is_key_person: isKey })
+    .eq("team_id", teamId)
+    .eq("role_id", roleId)
+    .eq("member_id", memberId);
+  revalidatePath(`/teams/${teamId}`);
+  revalidatePath("/schedule");
 }
 
 /** Remove a member from a team role. */

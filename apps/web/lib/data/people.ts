@@ -135,6 +135,7 @@ export interface MemberEditable {
   preferred_channel: ContactChannel;
   status: MemberStatus;
   target_serves_per_month: number | null;
+  household: string | null;
 }
 
 /** Raw editable member fields for the edit form (not the display projection). */
@@ -143,7 +144,7 @@ export async function getMemberEditable(id: string): Promise<MemberEditable | nu
   const { data, error } = await supabase
     .from("member")
     .select(
-      "id, display_name, phone_e164, email, preferred_channel, status, target_serves_per_month",
+      "id, display_name, phone_e164, email, preferred_channel, status, target_serves_per_month, household",
     )
     .eq("id", id)
     .maybeSingle();

@@ -48,6 +48,8 @@ export interface ChurchSettings {
   unfilled_warn_days: number;
   /** Conflict-engine threshold: warn when a member serves more than this many consecutive Sundays. */
   max_consecutive_sundays: number;
+  /** Opt-in: mint strict one-shot volunteer response links instead of reusable ones. */
+  single_use_response_links: boolean;
   sms_quota_used: number;
   auto_buy_sms_overage: boolean;
   sundaystage_connected: boolean;

@@ -156,6 +156,12 @@ export async function buildRecipientValues(
   const { data: church } = await supabase.from("church").select("name").maybeSingle();
   const churchName = (church?.name as string | undefined) ?? "your church";
 
+  const { data: settings } = await supabase
+    .from("church_settings")
+    .select("single_use_response_links")
+    .maybeSingle();
+  const singleUse = Boolean(settings?.single_use_response_links);
+
   const date = service ? new Date(service.starts_at_utc) : null;
   const serviceDate = date ? date.toISOString().slice(0, 10) : "";
   const serviceTime = date ? date.toISOString().slice(11, 16) : "";
@@ -168,7 +174,7 @@ export async function buildRecipientValues(
       church_id: r.church_id,
       assignment_id: r.assignment_id,
     }));
-    ({ links } = await mintResponseLinks(targets));
+    ({ links } = await mintResponseLinks(targets, { singleUse }));
   }
 
   const values: PerRecipientValues = {};

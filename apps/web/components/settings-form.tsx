@@ -180,6 +180,15 @@ export function VolunteerRulesForm({ settings }: { settings: ChurchSettings }) {
             />
             Auto-buy SMS overage when the quota runs out
           </label>
+          <label className="flex items-center gap-2 text-sm text-ink-300">
+            <input
+              type="checkbox"
+              name="single_use_response_links"
+              defaultChecked={settings.single_use_response_links}
+              className={checkbox}
+            />
+            Single-use response links (a tap locks the link; off = change-of-mind allowed)
+          </label>
         </section>
 
         <section className="space-y-3">

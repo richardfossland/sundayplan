@@ -67,6 +67,7 @@ export async function updateChurchSettings(
       blankToUndef(formData.get("max_consecutive_sundays")) ?? "3",
     ),
     auto_buy_sms_overage: formData.get("auto_buy_sms_overage") === "on",
+    single_use_response_links: formData.get("single_use_response_links") === "on",
     // Licensing
     ccli_license_number: blankToUndef(formData.get("ccli_license_number")) ?? null,
     ccli_size_category: (blankToUndef(formData.get("ccli_size_category")) ?? null) as

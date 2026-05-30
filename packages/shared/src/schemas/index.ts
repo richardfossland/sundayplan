@@ -56,6 +56,7 @@ export const ChurchSettingsInputSchema = z.object({
   unfilled_warn_days: z.number().int().min(1).max(60).optional(),
   max_consecutive_sundays: z.number().int().min(1).max(52).optional(),
   auto_buy_sms_overage: z.boolean().optional(),
+  single_use_response_links: z.boolean().optional(),
 });
 
 /** Church-level identity fields editable from the settings page. */

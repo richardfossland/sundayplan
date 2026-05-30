@@ -25,10 +25,28 @@ import {
   applyResponse,
   parseAction,
   isRespondable,
+  tokenHash,
   type RsvpAction,
 } from "@sundayplan/auth";
 import type { AssignmentStatus, MagicLinkClaims } from "@sundayplan/shared";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+/**
+ * A strict single-use link is spent once it has been used. Reusable links
+ * (single_use = false, the default) never count as spent — change-of-mind stays
+ * open until expiry. Links with no recorded row (mint insert failed, or a
+ * preview token) are never treated as spent: the signature alone authorizes.
+ */
+async function isLinkSpent(admin: AdminClient, token: string): Promise<boolean> {
+  const { data } = await admin
+    .from("magic_link")
+    .select("single_use, used_at")
+    .eq("token_hash", await tokenHash(token))
+    .maybeSingle();
+  return Boolean(data?.single_use && data.used_at);
+}
 
 function secret(): string {
   const s = process.env.MAGICLINK_SECRET;
@@ -97,6 +115,8 @@ export async function loadResponseContext(token: string): Promise<LoadResult> {
   if (error) throw error;
   if (!data) return { ok: false, error: "not_found" };
 
+  const spent = await isLinkSpent(admin, token);
+
   const row = data as unknown as Record<string, unknown>;
   const member = row.member as Record<string, unknown> | null;
   const role = row.role as Record<string, unknown> | null;
@@ -118,7 +138,8 @@ export async function loadResponseContext(token: string): Promise<LoadResult> {
       service_title: (service?.name as string | undefined) ?? "the service",
       service_starts_at: (service?.starts_at_utc as string | undefined) ?? "",
       church_name: (church?.name as string | undefined) ?? "your church",
-      respondable: isRespondable(status),
+      // A spent single-use link is no longer respondable — show the closed state.
+      respondable: isRespondable(status) && !spent,
     },
   };
 }
@@ -144,6 +165,21 @@ export async function respond(
   const { claims } = v;
 
   const admin = createAdminClient();
+
+  // A strict single-use link that has already been used is closed.
+  if (await isLinkSpent(admin, token)) {
+    const { data: cur } = await admin
+      .from("assignment")
+      .select("status")
+      .eq("id", claims.assignment_id)
+      .eq("member_id", claims.member_id)
+      .maybeSingle();
+    return {
+      ok: true,
+      outcome: "closed",
+      status: (cur as { status: AssignmentStatus } | null)?.status ?? "no_response",
+    };
+  }
 
   // Load current status (claim-scoped) to drive the transition.
   const { data: current, error: readErr } = await admin
@@ -186,6 +222,18 @@ export async function respond(
     // Reflect the change for planners viewing the schedule / service detail.
     revalidatePath("/schedule");
     revalidatePath("/services");
+  }
+
+  // Consume a strict single-use link on a real accept/decline. The partial
+  // filter (single_use = true, used_at is null) makes this a no-op for reusable
+  // links and for re-taps, so it's safe to run unconditionally on a change.
+  if (result.changed) {
+    await admin
+      .from("magic_link")
+      .update({ used_at: new Date().toISOString() })
+      .eq("token_hash", await tokenHash(token))
+      .eq("single_use", true)
+      .is("used_at", null);
   }
 
   return { ok: true, outcome: result.outcome, status: result.next };

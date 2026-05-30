@@ -63,13 +63,17 @@ export interface MintedResponseLink {
  */
 export async function mintResponseLinks(
   targets: ResponseLinkTarget[],
-  opts: { ttlSeconds?: number; baseUrl?: string } = {},
+  opts: { ttlSeconds?: number; baseUrl?: string; singleUse?: boolean } = {},
 ): Promise<{ links: Record<string, MintedResponseLink>; rows: number }> {
   if (targets.length === 0) return { links: {}, rows: 0 };
 
   const secret = magicLinkSecret();
   const ttl = opts.ttlSeconds ?? DEFAULT_TTL_SECONDS;
   const baseUrl = opts.baseUrl ?? appBaseUrl();
+  // Opt-in: strict one-shot links. Default stays reusable so a volunteer can
+  // change their mind until expiry (the Phase 7 contract); the respond path
+  // enforces used_at only when single_use is true.
+  const singleUse = opts.singleUse ?? false;
   const expiresAt = new Date(Date.now() + ttl * 1000).toISOString();
 
   const links: Record<string, MintedResponseLink> = {};
@@ -94,7 +98,7 @@ export async function mintResponseLinks(
         purpose: "assignment_response",
         assignment_id: t.assignment_id,
         token_hash: await tokenHash(token),
-        single_use: false, // change-of-mind window: the link stays usable until expiry
+        single_use: singleUse,
         expires_at: expiresAt,
       });
     }),

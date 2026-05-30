@@ -4,8 +4,11 @@ import {
   AvailabilityInputSchema,
   AvailabilityPattern,
   ChurchInputSchema,
+  DeliveryInputSchema,
   MagicLinkIssueSchema,
   MemberInputSchema,
+  MessageInputSchema,
+  MessageTemplateInputSchema,
   ServiceInputSchema,
   ServiceItemInputSchema,
   SongInputSchema,
@@ -142,5 +145,45 @@ describe("MagicLinkIssueSchema", () => {
     expect(m.ttl_seconds).toBe(60 * 60 * 24 * 7);
     expect(MagicLinkIssueSchema.safeParse({ member_id: UUID, purpose: "generic", ttl_seconds: 10 }).success).toBe(false);
     expect(MagicLinkIssueSchema.safeParse({ member_id: UUID, purpose: "generic", ttl_seconds: 60 * 60 * 24 * 60 }).success).toBe(false);
+  });
+});
+
+describe("MessageTemplateInputSchema", () => {
+  it("applies purpose + language + is_active defaults", () => {
+    const t = MessageTemplateInputSchema.parse({ name: "Invite", channel: "sms", body: "Hi {{volunteer_name}}" });
+    expect(t.purpose).toBe("custom");
+    expect(t.language).toBe("no");
+    expect(t.is_active).toBe(true);
+  });
+
+  it("rejects an unknown channel and an empty body", () => {
+    expect(MessageTemplateInputSchema.safeParse({ name: "X", channel: "carrier_pigeon", body: "x" }).success).toBe(false);
+    expect(MessageTemplateInputSchema.safeParse({ name: "X", channel: "sms", body: "" }).success).toBe(false);
+  });
+});
+
+describe("MessageInputSchema", () => {
+  it("requires a channel and a body", () => {
+    expect(MessageInputSchema.safeParse({ channel: "email", body: "Hello" }).success).toBe(true);
+    expect(MessageInputSchema.safeParse({ channel: "email" }).success).toBe(false);
+  });
+});
+
+describe("DeliveryInputSchema", () => {
+  it("defaults status to queued", () => {
+    const d = DeliveryInputSchema.parse({ message_id: UUID, channel: "sms", to_recipient: "+4791000001" });
+    expect(d.status).toBe("queued");
+  });
+
+  it("accepts skipped with a reason", () => {
+    const d = DeliveryInputSchema.parse({
+      message_id: UUID,
+      channel: "sms",
+      to_recipient: "—",
+      status: "skipped",
+      skip_reason: "no usable channel",
+    });
+    expect(d.status).toBe("skipped");
+    expect(d.skip_reason).toBe("no usable channel");
   });
 });

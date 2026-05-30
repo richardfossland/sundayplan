@@ -211,3 +211,88 @@ export const MagicLinkIssueSchema = z.object({
   /** Time-to-live in seconds — defaults to 7 days */
   ttl_seconds: z.number().int().min(60).max(60 * 60 * 24 * 30).default(60 * 60 * 24 * 7),
 });
+
+// ── Communications (Phase 6) ──────────────────────────────────────────────────
+// Templates a planner authors, the outbound messages built from them, and the
+// per-recipient delivery records. The SDK comms engine renders + resolves these;
+// the provider layer transmits them (stubbed by default).
+
+export const MessageChannel = z.enum(["sms", "email", "push"]);
+
+/**
+ * Why a message is being sent. Mirrors the reminder cadence so the scheduler
+ * (SDK `dueMessages`) can decide which to send for a service.
+ */
+export const MessagePurpose = z.enum([
+  "invite",
+  "reminder",
+  "final_reminder",
+  "confirmation",
+  "cancellation",
+  "custom",
+]);
+
+/**
+ * Variables a template may interpolate as `{{name}}`. Kept as a known set so the
+ * editor can offer them and the renderer can flag unknown ones. `accept_link` /
+ * `decline_link` are the Phase 7 magic-link seams.
+ */
+export const TemplateVariable = z.enum([
+  "volunteer_name",
+  "role_name",
+  "team_name",
+  "service_title",
+  "service_date",
+  "service_time",
+  "church_name",
+  "accept_link",
+  "decline_link",
+]);
+
+export const MessageTemplateInputSchema = z.object({
+  name: z.string().min(1).max(120),
+  channel: MessageChannel,
+  purpose: MessagePurpose.default("custom"),
+  language: localeCode.default("no"),
+  /** Required for email; ignored for sms/push (push uses it as the title). */
+  subject: z.string().max(200).optional().nullable(),
+  body: z.string().min(1).max(4000),
+  is_active: z.boolean().default(true),
+});
+
+export const DeliveryStatus = z.enum([
+  "queued",
+  "sent",
+  "delivered",
+  "failed",
+  "skipped",
+]);
+
+/** A planner-composed outbound message targeting a service's volunteers. */
+export const MessageInputSchema = z.object({
+  template_id: uuid.optional().nullable(),
+  service_id: uuid.optional().nullable(),
+  channel: MessageChannel,
+  purpose: MessagePurpose.default("custom"),
+  /** Rendered/snapshotted subject + body actually sent (audit-friendly). */
+  subject: z.string().max(200).optional().nullable(),
+  body: z.string().min(1).max(4000),
+});
+
+/**
+ * One row per (message, recipient). Stores the per-recipient rendered body and
+ * the lifecycle status. `skipped` carries a `skip_reason` (e.g. no usable
+ * channel). For GDPR we store a hash of the body for audit, not the plaintext.
+ */
+export const DeliveryInputSchema = z.object({
+  message_id: uuid,
+  member_id: uuid.optional().nullable(),
+  channel: MessageChannel,
+  to_recipient: z.string().max(200),
+  body_hash: z.string().max(64).optional().nullable(),
+  status: DeliveryStatus.default("queued"),
+  skip_reason: z.string().max(200).optional().nullable(),
+  provider: z.string().max(40).optional().nullable(),
+  provider_message_id: z.string().max(200).optional().nullable(),
+  cost_cents: z.number().int().min(0).optional().nullable(),
+});

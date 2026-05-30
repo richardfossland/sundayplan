@@ -323,3 +323,84 @@ export interface SmsLog {
   sent_at: string | null;
   created_at: string;
 }
+
+// ── Communications (Phase 6) ──────────────────────────────────────────────────
+// The comms domain: planner-authored templates, outbound messages built from
+// them, and per-recipient delivery records. The SDK comms engine renders +
+// resolves these; the provider layer transmits them (stubbed by default). The
+// `SmsLog` above predates this and is kept for the legacy SMS path; new code
+// uses `MessageDelivery`.
+
+export type MessageChannel = "sms" | "email" | "push";
+
+export type MessagePurpose =
+  | "invite"
+  | "reminder"
+  | "final_reminder"
+  | "confirmation"
+  | "cancellation"
+  | "custom";
+
+export type TemplateVariable =
+  | "volunteer_name"
+  | "role_name"
+  | "team_name"
+  | "service_title"
+  | "service_date"
+  | "service_time"
+  | "church_name"
+  | "accept_link"
+  | "decline_link";
+
+export interface MessageTemplate {
+  id: string;
+  church_id: string;
+  name: string;
+  channel: MessageChannel;
+  purpose: MessagePurpose;
+  language: string;
+  /** null for sms; subject for email; title for push */
+  subject: string | null;
+  body: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Message {
+  id: string;
+  church_id: string;
+  template_id: string | null;
+  service_id: string | null;
+  channel: MessageChannel;
+  purpose: MessagePurpose;
+  subject: string | null;
+  body: string;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type DeliveryStatus =
+  | "queued"
+  | "sent"
+  | "delivered"
+  | "failed"
+  | "skipped";
+
+export interface MessageDelivery {
+  id: string;
+  message_id: string;
+  church_id: string;
+  member_id: string | null;
+  channel: MessageChannel;
+  to_recipient: string;
+  /** hashed for GDPR; the plaintext lives only transiently */
+  body_hash: string | null;
+  status: DeliveryStatus;
+  skip_reason: string | null;
+  provider: string | null;
+  provider_message_id: string | null;
+  cost_cents: number | null;
+  sent_at: string | null;
+  created_at: string;
+}

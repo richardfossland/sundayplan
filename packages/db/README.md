@@ -23,6 +23,10 @@ supabase db push
 - `0002_core.sql` — full domain model: members, teams, roles, availability,
   services, songs, assignments, magic-link tokens, comms logs. RLS policies
   on every table.
+- `0003`–`0005` — volunteer (magic-link) RLS, `role.skill_required`, and the
+  `service_item`/`template_item`/`service_team_requirement` RLS fix.
+- `0006_comms.sql` — communications (Phase 6): `message_template`, `message`,
+  `message_delivery`, church-scoped RLS + a volunteer-read delivery policy.
 
 ## Generated types
 

@@ -98,3 +98,11 @@ create policy member_credential_volunteer_read on public.member_credential
 create trigger member_credential_set_updated_at
   before update on public.member_credential
   for each row execute function set_updated_at();
+
+-- ── role.required_credentials ──────────────────────────────────────────────
+-- Which credential kinds a role demands. Auto-fill skips a member who lacks any
+-- of these current (the SDK gate `isBlockedByCredentials`); planners can still
+-- assign manually (an informed override). Empty default = no gating, so this is
+-- backward-compatible for existing roles.
+alter table public.role
+  add column required_credentials text[] not null default '{}';

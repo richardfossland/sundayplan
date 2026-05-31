@@ -11,7 +11,12 @@
  * mostly zero/null, so the first draft ranks chiefly on skill match and target
  * frequency — and sharpens automatically as real history accrues.
  */
-import type { AutoFillSlot } from "@sundayplan/sdk";
+import {
+  isBlockedByCredentials,
+  type AutoFillSlot,
+  type CredentialKind,
+  type MemberCredential,
+} from "@sundayplan/sdk";
 import type { Availability, SkillLevel } from "@sundayplan/shared";
 import { createClient } from "@/lib/supabase/server";
 
@@ -25,6 +30,7 @@ interface ServiceRow {
 interface RoleRow {
   id: string;
   skill_required: SkillLevel;
+  required_credentials: CredentialKind[] | null;
 }
 interface AssignmentRow {
   service_id: string;
@@ -72,14 +78,15 @@ function consecutiveWeeks(dates: Date[]): number {
 
 export async function buildAutoFillSlots(now: Date = new Date()): Promise<AutoFillSlot[]> {
   const supabase = await createClient();
-  const [services, roles, assignments, members, memberships] = await Promise.all([
+  const [services, roles, assignments, members, memberships, credentials] = await Promise.all([
     supabase.from("service").select("id, starts_at_utc").order("starts_at_utc"),
-    supabase.from("role").select("id, skill_required").order("name"),
+    supabase.from("role").select("id, skill_required, required_credentials").order("name"),
     supabase.from("assignment").select("service_id, role_id, member_id, status"),
     supabase.from("member").select(
       "id, joined_at, target_serves_per_month, availability(id, member_id, kind, pattern, reason, reason_visibility)",
     ),
     supabase.from("team_membership").select("member_id, role_id, skill_level"),
+    supabase.from("member_credential").select("member_id, kind, status, expires_at"),
   ]);
   for (const r of [services, roles, assignments, members, memberships]) {
     if (r.error) throw r.error;
@@ -93,7 +100,16 @@ export async function buildAutoFillSlots(now: Date = new Date()): Promise<AutoFi
 
   const serviceStart = new Map(serviceRows.map((s) => [s.id, new Date(s.starts_at_utc)]));
   const roleSkill = new Map(roleRows.map((r) => [r.id, r.skill_required]));
+  const roleRequiredCreds = new Map(roleRows.map((r) => [r.id, r.required_credentials ?? []]));
   const memberById = new Map(memberRows.map((m) => [m.id, m]));
+
+  // Held credentials per member, for the gate. Missing table (pre-migration) →
+  // empty, so gating is a no-op until 0011 lands.
+  const credentialRows = (credentials.data ?? []) as unknown as ({ member_id: string } & MemberCredential)[];
+  const heldByMember = new Map<string, MemberCredential[]>();
+  for (const c of credentialRows) {
+    bucket(heldByMember, c.member_id).push({ kind: c.kind, status: c.status, expires_at: c.expires_at });
+  }
   const skillByMemberRole = new Map(
     membershipRows.map((tm) => [`${tm.member_id}:${tm.role_id}`, tm.skill_level]),
   );
@@ -145,7 +161,13 @@ export async function buildAutoFillSlots(now: Date = new Date()): Promise<AutoFi
     const startsAt = serviceStart.get(svc.id)!;
     for (const role of roleRows) {
       if (filledCell.has(`${svc.id}:${role.id}`)) continue; // already covered
-      const eligible = (eligibleByRole.get(role.id) ?? []).filter((id) => !taken.has(id));
+      const requiredCreds = roleRequiredCreds.get(role.id) ?? [];
+      const eligible = (eligibleByRole.get(role.id) ?? []).filter(
+        (id) =>
+          !taken.has(id) &&
+          // Credential gate: skip anyone missing a current required credential.
+          !isBlockedByCredentials(requiredCreds, heldByMember.get(id) ?? [], now),
+      );
       if (eligible.length === 0) continue; // no candidate → skip (nothing to propose)
       const required = roleSkill.get(role.id) ?? "capable";
       slots.push({

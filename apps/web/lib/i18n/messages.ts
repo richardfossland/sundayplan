@@ -79,6 +79,8 @@ const en: Catalog = {
   "dash.noService.title": "No upcoming services",
   "dash.noService.blurb": "Create a service to start planning the order and scheduling volunteers.",
   "dash.noService.cta": "New service",
+  "dash.swaps.banner": "{count} volunteer(s) need cover — someone handed a slot back.",
+  "dash.swaps.cta": "Find cover →",
 
   // Onboarding checklist
   "onb.title": "Get set up",
@@ -176,6 +178,8 @@ const no: Catalog = {
   "dash.noService.blurb":
     "Opprett en gudstjeneste for å begynne å planlegge rekkefølgen og sette opp frivillige.",
   "dash.noService.cta": "Ny gudstjeneste",
+  "dash.swaps.banner": "{count} frivillig(e) trenger erstatter — noen ga fra seg en rolle.",
+  "dash.swaps.cta": "Finn erstatter →",
 
   // Onboarding checklist
   "onb.title": "Kom i gang",

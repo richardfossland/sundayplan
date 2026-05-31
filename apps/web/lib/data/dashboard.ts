@@ -33,6 +33,8 @@ export interface DashboardData {
   pendingRsvps: number;
   openSlots: number;
   hardConflicts: number;
+  /** Volunteers who handed a slot back — a planner needs to find cover. */
+  openSwaps: number;
   conflicts: Conflict[];
   roleNames: Record<string, string>;
   memberNames: Record<string, string>;
@@ -59,7 +61,7 @@ function formatWhen(iso: string, timezone: string, locale: string): string {
 export async function getDashboard(): Promise<DashboardData> {
   const supabase = await createClient();
 
-  const [services, schedule, profile, rsvpRes, teamCount, roleCount, memberCount, messageCount] =
+  const [services, schedule, profile, rsvpRes, teamCount, roleCount, memberCount, messageCount, swapCount] =
     await Promise.all([
       getServices(),
       getSchedule(),
@@ -69,6 +71,7 @@ export async function getDashboard(): Promise<DashboardData> {
       supabase.from("role").select("id", { count: "exact", head: true }),
       supabase.from("member").select("id", { count: "exact", head: true }),
       supabase.from("message").select("id", { count: "exact", head: true }),
+      supabase.from("swap_request").select("id", { count: "exact", head: true }).eq("status", "open"),
     ]);
 
   const now = Date.now();
@@ -122,6 +125,7 @@ export async function getDashboard(): Promise<DashboardData> {
     pendingRsvps,
     openSlots,
     hardConflicts,
+    openSwaps: swapCount.count ?? 0,
     conflicts: schedule.conflicts,
     roleNames,
     memberNames: schedule.memberNames,

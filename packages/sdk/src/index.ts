@@ -10,6 +10,7 @@ export * from "./conflicts";
 export * from "./autofill";
 export * from "./swap";
 export * from "./credentials";
+export * from "./setlist-ai";
 export * from "./comms";
 export * from "./templates";
 export * from "./serviceplan";

@@ -67,6 +67,18 @@ export default async function DashboardPage() {
         />
       </div>
 
+      {d.openSwaps > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[color:var(--color-warning)]/30 bg-[color:var(--color-warning)]/10 px-5 py-3">
+          <p className="text-sm text-ink-100">{t("dash.swaps.banner", { count: d.openSwaps })}</p>
+          <Link
+            href="/schedule"
+            className="shrink-0 rounded-md bg-white/[0.08] px-3 py-1 text-xs text-ink-100 transition-colors hover:bg-white/[0.14]"
+          >
+            {t("dash.swaps.cta")}
+          </Link>
+        </div>
+      ) : null}
+
       {!d.checklist.complete ? <OnboardingChecklist checklist={d.checklist} /> : null}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

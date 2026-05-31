@@ -58,6 +58,39 @@ function groupBySong(rows: SongUsageRow[]): Map<string, SongUsageRow[]> {
   return map;
 }
 
+/**
+ * Resolve a song's display title from a group of usage rows. Picks the first
+ * non-blank title so a stray empty-title row (e.g. a partially-imported
+ * service) doesn't blank out an otherwise-named song. Falls back to the song
+ * id, which is never blank, so a title is always present in a report line.
+ */
+function resolveTitle(group: SongUsageRow[], songId: string): string {
+  for (const r of group) {
+    const t = r.title?.trim();
+    if (t) return r.title;
+  }
+  return songId;
+}
+
+/**
+ * Resolve a licensing id (TONO work id or CCLI number) for a song from its
+ * group of usage rows. A song is reportable if ANY of its rows carries the id,
+ * not merely the first — the work id is often back-filled partway through a
+ * quarter, so keying off `group[0]` alone would silently drop genuinely
+ * registered plays. Returns the first non-null, non-blank id, or null when
+ * every row lacks it.
+ */
+function resolveLicensingId(
+  group: SongUsageRow[],
+  field: "tonoWorkId" | "ccliNumber",
+): string | null {
+  for (const r of group) {
+    const id = r[field];
+    if (id != null && id.trim() !== "") return id;
+  }
+  return null;
+}
+
 function byTitle<T extends { title: string }>(a: T, b: T): number {
   return a.title.localeCompare(b.title);
 }
@@ -73,16 +106,17 @@ export function buildTonoReport(
   const unregistered: UnregisteredSongLine[] = [];
 
   for (const [songId, group] of groupBySong(inRange)) {
-    const first = group[0];
-    if (first.tonoWorkId == null) {
-      unregistered.push({ songId, title: first.title, totalPlays: group.length });
+    const title = resolveTitle(group, songId);
+    const tonoWorkId = resolveLicensingId(group, "tonoWorkId");
+    if (tonoWorkId == null) {
+      unregistered.push({ songId, title, totalPlays: group.length });
       continue;
     }
     const streamedPlays = group.filter((r) => r.wasStreamed).length;
     lines.push({
       songId,
-      title: first.title,
-      tonoWorkId: first.tonoWorkId,
+      title,
+      tonoWorkId,
       totalPlays: group.length,
       gatheredPlays: group.length - streamedPlays,
       streamedPlays,
@@ -119,15 +153,16 @@ export function buildCcliReport(
   const unregistered: UnregisteredSongLine[] = [];
 
   for (const [songId, group] of groupBySong(inRange)) {
-    const first = group[0];
-    if (first.ccliNumber == null) {
-      unregistered.push({ songId, title: first.title, totalPlays: group.length });
+    const title = resolveTitle(group, songId);
+    const ccliNumber = resolveLicensingId(group, "ccliNumber");
+    if (ccliNumber == null) {
+      unregistered.push({ songId, title, totalPlays: group.length });
       continue;
     }
     lines.push({
       songId,
-      title: first.title,
-      ccliNumber: first.ccliNumber,
+      title,
+      ccliNumber,
       totalPlays: group.length,
       serviceDates: sortedDistinctDates(group),
     });

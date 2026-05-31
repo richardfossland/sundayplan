@@ -137,6 +137,50 @@ describe("skill_match tiers", () => {
   }
 });
 
+describe("skill_match — additional tiers", () => {
+  it("training filling a training-level slot is a perfect match (raw 1)", () => {
+    const b = scoreCandidate(makeInput({ candidate: { skill_level: "training" }, slot: { role_skill_required: "training" } }));
+    expect(component(b!, "skill_match").raw).toBe(1);
+  });
+
+  it("a capable member is overqualified for a training slot (raw 1)", () => {
+    const b = scoreCandidate(makeInput({ candidate: { skill_level: "capable" }, slot: { role_skill_required: "training" } }));
+    expect(component(b!, "skill_match").raw).toBe(1);
+    expect(component(b!, "skill_match").explanation).toMatch(/perfect skill match/);
+  });
+
+  it("training two steps under a lead slot warns about pairing with a trainer", () => {
+    const b = scoreCandidate(makeInput({ candidate: { skill_level: "training" }, slot: { role_skill_required: "lead" } }));
+    expect(component(b!, "skill_match").raw).toBe(0.4);
+    expect(component(b!, "skill_match").explanation).toMatch(/pair with a trainer/);
+  });
+});
+
+describe("variety", () => {
+  it("full bonus when the same-role gap exceeds the any-role gap", () => {
+    // did this exact role longer ago than they last did anything → fresh variety
+    const b = scoreCandidate(
+      makeInput({ candidate: { days_since_last_assignment_same_role: 40, days_since_last_assignment: 5 } }),
+    );
+    expect(component(b!, "variety").raw).toBe(1);
+    expect(component(b!, "variety").explanation).toMatch(/this exact role/);
+  });
+
+  it("neutral when the same-role gap is not larger than the any-role gap", () => {
+    const b = scoreCandidate(
+      makeInput({ candidate: { days_since_last_assignment_same_role: 5, days_since_last_assignment: 40 } }),
+    );
+    expect(component(b!, "variety").raw).toBe(0.4);
+  });
+
+  it("neutral when either gap is unknown (null)", () => {
+    const b = scoreCandidate(
+      makeInput({ candidate: { days_since_last_assignment_same_role: 40, days_since_last_assignment: null } }),
+    );
+    expect(component(b!, "variety").raw).toBe(0.4);
+  });
+});
+
 describe("rotation_fairness", () => {
   it("caps at full score after 28 days (same-role gap wins)", () => {
     const b = scoreCandidate(makeInput({ candidate: { days_since_last_assignment_same_role: 56, days_since_last_assignment: 3 } }));
@@ -155,6 +199,26 @@ describe("rotation_fairness", () => {
   });
 });
 
+describe("rotation_fairness — clock-skew / future-dated history", () => {
+  it("clamps a negative same-role gap to 0 (never a negative contribution)", () => {
+    const b = scoreCandidate(
+      makeInput({ candidate: { days_since_last_assignment_same_role: -5, days_since_last_assignment: 14 } }),
+    );
+    const fair = component(b!, "rotation_fairness");
+    expect(fair.raw).toBe(0);
+    expect(fair.contribution).toBe(0);
+    // the explanation reports the clamped value, not a nonsensical negative
+    expect(fair.explanation).toMatch(/^0 days/);
+  });
+
+  it("falls through to the any-role gap when same-role is null, clamping that too", () => {
+    const b = scoreCandidate(
+      makeInput({ candidate: { days_since_last_assignment_same_role: null, days_since_last_assignment: -10 } }),
+    );
+    expect(component(b!, "rotation_fairness").raw).toBe(0);
+  });
+});
+
 describe("frequency_balance", () => {
   it("is maximal at the target serve frequency", () => {
     const b = scoreCandidate(makeInput({ candidate: { accepted_recent_count: 6, target_serves_per_month: 2 } }));
@@ -164,6 +228,25 @@ describe("frequency_balance", () => {
   it("floors at 0 when far above target", () => {
     const b = scoreCandidate(makeInput({ candidate: { accepted_recent_count: 21, target_serves_per_month: 2 } }));
     expect(component(b!, "frequency_balance").raw).toBe(0);
+  });
+
+  it("is maximal for a never-served member whose target is also 0 (do-not-schedule)", () => {
+    // target 0, no recent serves → distance 0 → perfectly on-target
+    const b = scoreCandidate(makeInput({ candidate: { accepted_recent_count: 0, target_serves_per_month: 0 } }));
+    expect(component(b!, "frequency_balance").raw).toBe(1);
+    expect(component(b!, "frequency_balance").explanation).toMatch(/near target/);
+  });
+
+  it("penalizes serving a member whose target is 0 (any serve is over target)", () => {
+    // 6 serves/90d ≈ 2.0/month vs target 0 → distance 2 → 1 - 2/4 = 0.5
+    const b = scoreCandidate(makeInput({ candidate: { accepted_recent_count: 6, target_serves_per_month: 0 } }));
+    expect(component(b!, "frequency_balance").raw).toBeCloseTo(0.5, 5);
+  });
+
+  it("clamps a negative accepted count to 0 rather than over-rewarding", () => {
+    // negative count would otherwise read as "served less than never"; clamp → 0/month
+    const b = scoreCandidate(makeInput({ candidate: { accepted_recent_count: -30, target_serves_per_month: 0 } }));
+    expect(component(b!, "frequency_balance").raw).toBe(1);
   });
 });
 
@@ -195,6 +278,22 @@ describe("pairing", () => {
 
   it("gives no pairing bonus when neither signal is present", () => {
     const b = scoreCandidate(makeInput({ candidate: { has_frequent_partner_on_service: false, has_trainer_paired: false } }));
+    expect(component(b!, "pairing").raw).toBe(0);
+  });
+
+  it("rewards a frequent partner for any skill level, not just training", () => {
+    const b = scoreCandidate(
+      makeInput({ candidate: { skill_level: "lead", has_frequent_partner_on_service: true, has_trainer_paired: false } }),
+    );
+    expect(component(b!, "pairing").raw).toBe(1);
+    expect(component(b!, "pairing").explanation).toMatch(/frequent partner/);
+  });
+
+  it("ignores a trainer-paired signal for a non-training member (no double bonus, partner still wins)", () => {
+    // has_trainer_paired only matters when skill_level === 'training'
+    const b = scoreCandidate(
+      makeInput({ candidate: { skill_level: "capable", has_frequent_partner_on_service: false, has_trainer_paired: true } }),
+    );
     expect(component(b!, "pairing").raw).toBe(0);
   });
 });

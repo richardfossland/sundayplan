@@ -106,9 +106,12 @@ export function scoreCandidate(input: ScoringInputs): ScoreBreakdown | null {
 
   // ── 2. Rotation fairness ──────────────────────────────────────────────────
   // More days since last assignment = higher fairness. 28 days = full score.
-  const daysSince = candidate.days_since_last_assignment_same_role
+  const daysSinceRaw = candidate.days_since_last_assignment_same_role
     ?? candidate.days_since_last_assignment
     ?? 90;
+  // Guard against clock skew / future-dated history: a "negative gap" must not
+  // pull fairness below zero (it would otherwise subtract from the total).
+  const daysSince = Math.max(0, daysSinceRaw);
   const fairnessRaw = Math.min(1, daysSince / 28);
   components.push({
     name: "rotation_fairness",
@@ -120,7 +123,9 @@ export function scoreCandidate(input: ScoringInputs): ScoreBreakdown | null {
 
   // ── 3. Frequency balance ──────────────────────────────────────────────────
   // Distance from target serves/month — closer = better.
-  const monthEquivalent = (candidate.accepted_recent_count / 90) * 30;
+  // Negative counts can't happen from real data, but clamp defensively so the
+  // monthly-equivalent rate is never negative.
+  const monthEquivalent = (Math.max(0, candidate.accepted_recent_count) / 90) * 30;
   const distance = Math.abs(monthEquivalent - candidate.target_serves_per_month);
   const freqRaw = Math.max(0, 1 - distance / 4);
   components.push({

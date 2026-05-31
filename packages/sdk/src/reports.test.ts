@@ -117,6 +117,42 @@ describe("buildTonoReport", () => {
     expect(rep.unregistered).toEqual([]);
     expect(rep.totals.totalPlays).toBe(0);
   });
+
+  it("reports a song as registered if ANY row carries the work id (back-filled mid-quarter)", () => {
+    // first chronological/insertion row lacks the id; a later one has it. The
+    // whole song must be reported, not split or dropped on row order.
+    const rows: SongUsageRow[] = [
+      usage({ songId: "s1", tonoWorkId: null, serviceId: "v1", serviceDateLocal: "2026-04-05T10:00:00+02:00" }),
+      usage({ songId: "s1", tonoWorkId: "T-9", serviceId: "v2", serviceDateLocal: "2026-04-12T10:00:00+02:00" }),
+    ];
+    const rep = buildTonoReport(rows, "2026-04-01", "2026-07-01");
+    expect(rep.unregistered).toEqual([]);
+    expect(rep.lines).toHaveLength(1);
+    expect(rep.lines[0].tonoWorkId).toBe("T-9");
+    expect(rep.lines[0].totalPlays).toBe(2); // both plays count
+  });
+
+  it("treats a blank/whitespace work id as unregistered", () => {
+    const rows: SongUsageRow[] = [usage({ songId: "s1", tonoWorkId: "   ", title: "Blank Id" })];
+    const rep = buildTonoReport(rows, "2026-04-01", "2026-07-01");
+    expect(rep.lines).toEqual([]);
+    expect(rep.unregistered.map((u) => u.songId)).toEqual(["s1"]);
+  });
+
+  it("uses the first non-blank title across the group", () => {
+    const rows: SongUsageRow[] = [
+      usage({ songId: "s1", tonoWorkId: "T-1", title: "   ", serviceId: "v1" }),
+      usage({ songId: "s1", tonoWorkId: "T-1", title: "Real Title", serviceId: "v2" }),
+    ];
+    const rep = buildTonoReport(rows, "2026-04-01", "2026-07-01");
+    expect(rep.lines[0].title).toBe("Real Title");
+  });
+
+  it("falls back to the song id when every row's title is blank", () => {
+    const rows: SongUsageRow[] = [usage({ songId: "song-x", tonoWorkId: null, title: "" })];
+    const rep = buildTonoReport(rows, "2026-04-01", "2026-07-01");
+    expect(rep.unregistered[0].title).toBe("song-x");
+  });
 });
 
 describe("buildCcliReport", () => {
@@ -141,6 +177,25 @@ describe("buildCcliReport", () => {
     expect(rep.lines[0].serviceDates).toEqual(["2026-04-05", "2026-04-12"]);
     expect(rep.totals.totalPlays).toBe(2);
     expect(rep.totals.reportableSongs).toBe(1);
+  });
+
+  it("reports a song as registered if ANY row carries the CCLI number", () => {
+    const rows: SongUsageRow[] = [
+      usage({ songId: "s1", ccliNumber: null, serviceId: "v1", serviceDateLocal: "2026-04-05T10:00:00+02:00" }),
+      usage({ songId: "s1", ccliNumber: "C-7", serviceId: "v2", serviceDateLocal: "2026-04-12T10:00:00+02:00" }),
+    ];
+    const rep = buildCcliReport(rows, "2026-04-01", "2026-07-01");
+    expect(rep.unregistered).toEqual([]);
+    expect(rep.lines).toHaveLength(1);
+    expect(rep.lines[0].ccliNumber).toBe("C-7");
+    expect(rep.lines[0].totalPlays).toBe(2);
+  });
+
+  it("treats a blank CCLI number as unregistered", () => {
+    const rows: SongUsageRow[] = [usage({ songId: "s1", ccliNumber: "" })];
+    const rep = buildCcliReport(rows, "2026-04-01", "2026-07-01");
+    expect(rep.lines).toEqual([]);
+    expect(rep.unregistered.map((u) => u.songId)).toEqual(["s1"]);
   });
 });
 
@@ -210,10 +265,24 @@ describe("quarterRange", () => {
       to: "2026-04-01",
     });
   });
+  it("Q3 for a September date is Jul 1 → Oct 1", () => {
+    expect(quarterRange(new Date("2026-09-30T23:00:00"))).toEqual({
+      from: "2026-07-01",
+      to: "2026-10-01",
+    });
+  });
+
   it("Q4 rolls the upper bound into the next year", () => {
     expect(quarterRange(new Date("2026-11-15T12:00:00"))).toEqual({
       from: "2026-10-01",
       to: "2027-01-01",
+    });
+  });
+
+  it("the first instant of Q1 (Jan 1) still resolves to Q1", () => {
+    expect(quarterRange(new Date("2026-01-01T00:00:00"))).toEqual({
+      from: "2026-01-01",
+      to: "2026-04-01",
     });
   });
 });

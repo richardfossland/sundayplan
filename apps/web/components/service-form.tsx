@@ -90,11 +90,18 @@ function CommonFields({
   );
 }
 
-export function NewServiceForm({ templates }: { templates: TemplateOption[] }) {
+export function NewServiceForm({
+  templates,
+  defaultDate,
+}: {
+  templates: TemplateOption[];
+  /** Prefilled "YYYY-MM-DDTHH:mm" when arriving from a calendar day click. */
+  defaultDate?: string;
+}) {
   const [state, action, pending] = useActionState(createService, initial);
   return (
     <form action={action} className="space-y-4">
-      <CommonFields />
+      <CommonFields startsAtLocal={defaultDate} />
       {templates.length > 0 ? (
         <div>
           <label className={label}>Start from template</label>

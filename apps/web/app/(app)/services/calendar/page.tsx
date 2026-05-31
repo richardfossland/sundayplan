@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SectionTitle } from "@/components/ui";
-import { getServices } from "@/lib/data/services";
+import { getServices, type ServiceSummary } from "@/lib/data/services";
+import { getChurchProfile } from "@/lib/data/settings";
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -24,6 +25,48 @@ function shift(year: number, month: number, by: number): string {
   return `${Math.floor(idx / 12)}-${pad((idx % 12) + 1)}`;
 }
 
+// A service's calendar date depends on the church's timezone, not UTC — an
+// 11pm-UTC Saturday service in Oslo is Sunday locally. We bucket by the local
+// Y-M-D and render the local time on the chip.
+interface LocalParts {
+  year: number;
+  month: number; // 1-based
+  day: number;
+  time: string; // "HH:mm"
+}
+
+function makeLocalParts(timezone: string) {
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  return (iso: string): LocalParts => {
+    const parts = fmt.formatToParts(new Date(iso));
+    const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+    return {
+      year: Number(get("year")),
+      month: Number(get("month")),
+      day: Number(get("day")),
+      time: `${get("hour")}:${get("minute")}`,
+    };
+  };
+}
+
+// Chip colour by coverage so a planner spots under-staffed Sundays at a glance.
+function chipClass(s: ServiceSummary): string {
+  if (s.required_roles != null) {
+    return s.filled_roles >= s.required_roles
+      ? "bg-[color:var(--color-success)]/15 text-[color:var(--color-success)] hover:bg-[color:var(--color-success)]/25"
+      : "bg-[color:var(--color-warning)]/15 text-[color:var(--color-warning)] hover:bg-[color:var(--color-warning)]/25";
+  }
+  return "bg-gold-400/10 text-gold-200 hover:bg-gold-400/20";
+}
+
 export default async function CalendarPage({
   searchParams,
 }: {
@@ -32,19 +75,21 @@ export default async function CalendarPage({
   const { m } = await searchParams;
   const { year, month } = parseMonth(m);
 
-  const all = await getServices();
-  // Group services by their UTC calendar date within this month.
-  const prefix = `${year}-${pad(month + 1)}`;
-  const byDay = new Map<number, typeof all>();
+  const [all, profile] = await Promise.all([getServices(), getChurchProfile()]);
+  const timezone = profile?.timezone ?? "UTC";
+  const toLocal = makeLocalParts(timezone);
+
+  // Group services by their local calendar day within the displayed month.
+  const byDay = new Map<number, { s: ServiceSummary; time: string }[]>();
   for (const s of all) {
-    if (!s.starts_at_utc.startsWith(prefix)) continue;
-    const day = Number(s.starts_at_utc.slice(8, 10));
-    const list = byDay.get(day) ?? [];
-    list.push(s);
-    byDay.set(day, list);
+    const lp = toLocal(s.starts_at_utc);
+    if (lp.year !== year || lp.month !== month + 1) continue;
+    const list = byDay.get(lp.day) ?? [];
+    list.push({ s, time: lp.time });
+    byDay.set(lp.day, list);
   }
 
-  // Build the calendar grid, Monday-first.
+  // Calendar grid, Monday-first.
   const firstWeekday = (new Date(Date.UTC(year, month, 1)).getUTCDay() + 6) % 7;
   const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
   const cells: (number | null)[] = [];
@@ -92,35 +137,50 @@ export default async function CalendarPage({
           ))}
         </div>
         <div className="grid grid-cols-7">
-          {cells.map((day, i) => (
-            <div
-              key={i}
-              className="min-h-[88px] border-b border-r border-white/[0.04] p-1.5 last:border-r-0"
-            >
-              {day != null ? (
-                <>
-                  <div className="mb-1 text-[0.7rem] tabular-nums text-ink-500">{day}</div>
-                  <div className="space-y-1">
-                    {(byDay.get(day) ?? []).map((s) => (
+          {cells.map((day, i) => {
+            const dateStr = day != null ? `${year}-${pad(month + 1)}-${pad(day)}` : "";
+            return (
+              <div
+                key={i}
+                className="group/day relative min-h-[88px] border-b border-r border-white/[0.04] p-1.5 last:border-r-0"
+              >
+                {day != null ? (
+                  <>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-[0.7rem] tabular-nums text-ink-500">{day}</span>
                       <Link
-                        key={s.id}
-                        href={`/services/${s.id}`}
-                        className="block truncate rounded bg-gold-400/10 px-1.5 py-1 text-[0.7rem] text-gold-200 transition-colors hover:bg-gold-400/20"
-                        title={`${s.name} — ${s.starts_at_utc.slice(11, 16)}`}
+                        href={`/services/new?date=${dateStr}`}
+                        title="New service this day"
+                        className="text-[0.7rem] leading-none text-ink-600 opacity-0 transition-opacity hover:text-gold-300 group-hover/day:opacity-100"
                       >
-                        {s.starts_at_utc.slice(11, 16)} {s.name}
+                        +
                       </Link>
-                    ))}
-                  </div>
-                </>
-              ) : null}
-            </div>
-          ))}
+                    </div>
+                    <div className="space-y-1">
+                      {(byDay.get(day) ?? []).map(({ s, time }) => (
+                        <Link
+                          key={s.id}
+                          href={`/services/${s.id}`}
+                          className={`block truncate rounded px-1.5 py-1 text-[0.7rem] transition-colors ${chipClass(s)}`}
+                          title={`${s.name} — ${time}${
+                            s.required_roles != null ? ` · ${s.filled_roles}/${s.required_roles} roles` : ""
+                          }`}
+                        >
+                          {time} {s.name}
+                        </Link>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </div>
 
       <p className="text-center text-xs text-ink-600">
-        Dates shown in UTC (church-local timezone is a follow-up). Tap a service to open it.
+        Times shown in {timezone}. Green = fully staffed, amber = roles still open. Tap a day&apos;s{" "}
+        <span className="text-ink-400">+</span> to plan a new service.
       </p>
     </div>
   );

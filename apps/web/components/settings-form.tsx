@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import {
   updateChurchProfile,
   updateChurchSettings,
@@ -9,6 +9,7 @@ import {
 import type { ChurchProfile } from "@/lib/data/settings";
 import type { ChurchSettings } from "@sundayplan/shared";
 import { Card, CardHeader } from "@/components/ui";
+import { TabBar } from "@/components/tabs";
 
 const initial: SettingsFormState = { error: null, ok: false };
 
@@ -97,8 +98,15 @@ export function ChurchProfileForm({ church }: { church: ChurchProfile }) {
   );
 }
 
+const RULES_TABS = [
+  { id: "scheduling", label: "Scheduling" },
+  { id: "comms", label: "Communications" },
+  { id: "licensing", label: "Licensing" },
+];
+
 export function VolunteerRulesForm({ settings }: { settings: ChurchSettings }) {
   const [state, action, pending] = useActionState(updateChurchSettings, initial);
+  const [tab, setTab] = useState("scheduling");
   const c = settings.reminder_cadence ?? { days_before: [], hours_before: [] };
   return (
     <Card>
@@ -106,8 +114,13 @@ export function VolunteerRulesForm({ settings }: { settings: ChurchSettings }) {
         title="Volunteer rules, reminders & licensing"
         sub="Drives auto-fill caps, the conflict engine, reminder cadence, and TONO/CCLI reporting."
       />
+      <div className="px-5 pt-3">
+        <TabBar tabs={RULES_TABS} active={tab} onChange={setTab} />
+      </div>
+      {/* One form spanning all tabs — inactive panels are hidden, not unmounted,
+          so a single Save still persists every field (the action reads them all). */}
       <form action={action} className="space-y-6 px-5 py-5">
-        <section className="space-y-3">
+        <section className="space-y-3" hidden={tab !== "scheduling"}>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-500">Scheduling</h3>
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
@@ -149,8 +162,8 @@ export function VolunteerRulesForm({ settings }: { settings: ChurchSettings }) {
           </div>
         </section>
 
-        <section className="space-y-3">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-500">Reminders</h3>
+        <section className="space-y-3" hidden={tab !== "comms"}>
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-500">Reminders &amp; messaging</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className={label}>Days before (comma-separated)</label>
@@ -191,7 +204,7 @@ export function VolunteerRulesForm({ settings }: { settings: ChurchSettings }) {
           </label>
         </section>
 
-        <section className="space-y-3">
+        <section className="space-y-3" hidden={tab !== "licensing"}>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-500">CCLI</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
@@ -229,7 +242,7 @@ export function VolunteerRulesForm({ settings }: { settings: ChurchSettings }) {
           </label>
         </section>
 
-        <section className="space-y-3">
+        <section className="space-y-3" hidden={tab !== "licensing"}>
           <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-500">TONO</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>

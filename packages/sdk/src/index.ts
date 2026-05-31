@@ -11,6 +11,8 @@ export * from "./autofill";
 export * from "./comms";
 export * from "./templates";
 export * from "./serviceplan";
+export * from "./serviceplan-bundle";
+export * from "./serviceplan-assemble";
 export * from "./channels";
 export * from "./reports";
 export * from "./coverage";

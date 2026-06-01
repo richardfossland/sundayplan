@@ -111,6 +111,12 @@ const en: Catalog = {
   "conflict.action.review": "Review",
   "conflict.action.resolve": "Resolve",
 
+  // Schedule page
+  "schedule.eyebrow": "Upcoming services",
+  "schedule.title": "Schedule",
+  "schedule.footer":
+    "Conflict markers come straight from detectConflicts() in @sundayplan/sdk — run live against this church's rota.",
+
   // Common
   "common.church": "Your church",
   "common.save": "Save",
@@ -445,6 +451,12 @@ const no: Catalog = {
   "conflict.action.fillSlot": "Fyll rolle",
   "conflict.action.review": "Se nærmere",
   "conflict.action.resolve": "Løs",
+
+  // Schedule page
+  "schedule.eyebrow": "Kommende gudstjenester",
+  "schedule.title": "Vaktliste",
+  "schedule.footer":
+    "Konfliktmarkørene kommer direkte fra detectConflicts() i @sundayplan/sdk — kjøres live mot menighetens vaktliste.",
 
   // Common
   "common.church": "Din menighet",

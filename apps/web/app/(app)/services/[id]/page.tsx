@@ -4,21 +4,9 @@ import { Badge, Card, CardHeader } from "@/components/ui";
 import { ServiceEditor } from "@/components/service-editor";
 import { getService, type ServiceAssignmentRow } from "@/lib/data/services";
 import { getSongOptions } from "@/lib/data/songs";
-import { getT, type TFn } from "@/lib/i18n/server";
+import { getT, getLocale, type TFn } from "@/lib/i18n/server";
+import { formatWhenLong } from "@/lib/i18n/date";
 import type { ServiceState } from "@sundayplan/shared";
-
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
-function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  const hh = String(d.getUTCHours()).padStart(2, "0");
-  const mm = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()} · ${hh}:${mm}`;
-}
 
 const STATE_TONE: Record<ServiceState, "neutral" | "success" | "warning" | "info"> = {
   draft: "neutral",
@@ -64,10 +52,13 @@ function AssignmentList({ assignments, t }: { assignments: ServiceAssignmentRow[
 
 export default async function ServicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const t = await getT();
-  const service = await getService(id);
+  const [t, locale, service, songs] = await Promise.all([
+    getT(),
+    getLocale(),
+    getService(id),
+    getSongOptions(),
+  ]);
   if (!service) notFound();
-  const songs = await getSongOptions();
 
   return (
     <div className="space-y-6">
@@ -96,7 +87,7 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
           </div>
         </div>
         <p className="mt-2 text-sm text-ink-400">
-          {formatWhen(service.starts_at_utc)}
+          {formatWhenLong(service.starts_at_utc, locale)}
           {service.template_name ? (
             <span className="text-ink-600"> · {t("services.fromTemplate", { name: service.template_name })}</span>
           ) : null}

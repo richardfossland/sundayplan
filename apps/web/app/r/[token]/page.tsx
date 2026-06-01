@@ -15,6 +15,7 @@ import type { Metadata } from "next";
 import { loadResponseContext, type LoadError } from "./actions";
 import { RsvpForm } from "@/components/rsvp-form";
 import { translate, type Locale } from "@/lib/i18n/messages";
+import { formatWhenLong } from "@/lib/i18n/date";
 
 export const dynamic = "force-dynamic";
 
@@ -23,26 +24,12 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
-
 function safeDecode(s: string): string {
   try {
     return decodeURIComponent(s);
   } catch {
     return s;
   }
-}
-
-function formatWhen(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const hh = String(d.getUTCHours()).padStart(2, "0");
-  const mm = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()} · ${hh}:${mm}`;
 }
 
 const ERROR_KEY: Record<LoadError, string> = {
@@ -110,7 +97,7 @@ export default async function RespondPage({
           {c.team_name ? <p className="text-sm text-ink-500">{c.team_name}</p> : null}
           <div className="mt-4 border-t border-white/[0.06] pt-4">
             <p className="text-base font-medium text-ink-100">{c.service_title}</p>
-            <p className="mt-0.5 text-sm text-ink-400">{formatWhen(c.service_starts_at)}</p>
+            <p className="mt-0.5 text-sm text-ink-400">{formatWhenLong(c.service_starts_at, locale)}</p>
           </div>
         </div>
 

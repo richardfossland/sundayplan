@@ -1,17 +1,12 @@
 import Link from "next/link";
 import { Badge, Card, SectionTitle } from "@/components/ui";
 import { getSongs, getSongThemes, STALE_DAYS } from "@/lib/data/songs";
-import { getT } from "@/lib/i18n/server";
+import { getT, getLocale } from "@/lib/i18n/server";
+import { formatDateCompact } from "@/lib/i18n/date";
 
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-function lastUsedLabel(iso: string | null, never: string): string {
+function lastUsedLabel(iso: string | null, never: string, locale: string): string {
   if (!iso) return never;
-  const d = new Date(iso);
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  return formatDateCompact(iso, locale);
 }
 
 const LANGS = [
@@ -32,7 +27,7 @@ export default async function SongsPage({
 }: {
   searchParams: Promise<{ q?: string; theme?: string; language?: string; stale?: string }>;
 }) {
-  const t = await getT();
+  const [t, locale] = await Promise.all([getT(), getLocale()]);
   const sp = await searchParams;
   const filters = {
     q: sp.q || undefined,
@@ -111,7 +106,7 @@ export default async function SongsPage({
                   </p>
                 </div>
                 <div className="text-right text-xs text-ink-500">
-                  <p>{t("songs.lastUsed", { date: lastUsedLabel(s.last_used_at, t("songs.never")) })}</p>
+                  <p>{t("songs.lastUsed", { date: lastUsedLabel(s.last_used_at, t("songs.never"), locale) })}</p>
                   <p className="text-ink-600">
                     {s.usage_count === 1
                       ? t("songs.serviceCount.one", { count: s.usage_count })

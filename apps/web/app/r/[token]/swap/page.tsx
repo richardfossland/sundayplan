@@ -7,6 +7,7 @@ import type { Metadata } from "next";
 import { loadSwapContext } from "./actions";
 import { VolunteerSwap } from "@/components/volunteer-swap";
 import { translate } from "@/lib/i18n/messages";
+import { formatWhenShort } from "@/lib/i18n/date";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -20,16 +21,6 @@ function safeDecode(s: string): string {
   } catch {
     return s;
   }
-}
-
-const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-function formatWhen(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  const hh = String(d.getUTCHours()).padStart(2, "0");
-  const mm = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} · ${hh}:${mm}`;
 }
 
 function Frame({ children }: { children: React.ReactNode }) {
@@ -80,7 +71,7 @@ export default async function SwapPage({ params }: { params: Promise<{ token: st
           </p>
           <p className="mt-1 text-xl font-semibold tracking-tight text-ink-50">{c.role_name}</p>
           <p className="mt-0.5 text-sm text-ink-400">
-            {c.service_title} · {formatWhen(c.service_starts_at)}
+            {c.service_title} · {formatWhenShort(c.service_starts_at, locale)}
           </p>
         </div>
         <VolunteerSwap token={token} candidates={c.candidates} locale={locale} />

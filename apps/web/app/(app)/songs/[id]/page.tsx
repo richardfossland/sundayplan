@@ -3,17 +3,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Card, CardHeader } from "@/components/ui";
 import { getSong } from "@/lib/data/songs";
-import { getT } from "@/lib/i18n/server";
-
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-function dateLabel(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
-}
+import { getT, getLocale } from "@/lib/i18n/server";
+import { formatDateCompact } from "@/lib/i18n/date";
 
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -26,8 +17,7 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
 
 export default async function SongPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const t = await getT();
-  const song = await getSong(id);
+  const [t, locale, song] = await Promise.all([getT(), getLocale(), getSong(id)]);
   if (!song) notFound();
 
   return (
@@ -113,7 +103,7 @@ export default async function SongPage({ params }: { params: Promise<{ id: strin
                     <Link href={`/services/${h.service_id}`} className="text-sm text-ink-100 hover:text-gold-300">
                       {h.service_name}
                     </Link>
-                    <p className="text-xs text-ink-500">{dateLabel(h.starts_at_utc)}</p>
+                    <p className="text-xs text-ink-500">{formatDateCompact(h.starts_at_utc, locale)}</p>
                   </li>
                 ))}
               </ul>

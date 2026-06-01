@@ -56,11 +56,6 @@ export interface ScheduleData {
   requiredByServiceRole: Record<string, number>;
 }
 
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
 const SKILL_RANK: Record<SkillLevel, number> = {
   training: 0,
   capable: 1,
@@ -68,10 +63,16 @@ const SKILL_RANK: Record<SkillLevel, number> = {
   trainer: 3,
 };
 
-/** Compact column label, e.g. "7 Jun", from a UTC service start. */
-function shortLabel(iso: string): string {
+/** Compact column label, e.g. "7. jun." (no) or "7 Jun" (en), from a UTC service start. */
+function shortLabel(iso: string, locale: string): string {
+  if (!iso) return "";
   const d = new Date(iso);
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  const bcp47 = locale === "no" ? "nb-NO" : "en-GB";
+  return new Intl.DateTimeFormat(bcp47, {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(d);
 }
 
 interface ServiceRow {
@@ -116,7 +117,7 @@ interface MembershipRow {
  * requirements live on service_template and seed services aren't templated — so
  * the unfilled-slot rule stays dormant until that lands. Every other rule runs.
  */
-export async function getSchedule(): Promise<ScheduleData> {
+export async function getSchedule(locale = "no"): Promise<ScheduleData> {
   const supabase = await createClient();
 
   const [services, roles, assignments, members, memberships, requirements, settings] =
@@ -155,7 +156,7 @@ export async function getSchedule(): Promise<ScheduleData> {
 
   const gridServices: GridService[] = serviceRows.map((s) => ({
     id: s.id,
-    label: shortLabel(s.starts_at_utc),
+    label: shortLabel(s.starts_at_utc, locale),
   }));
   const gridRoles: GridRole[] = roleRows.map((r) => ({
     id: r.id,

@@ -1,21 +1,9 @@
 import Link from "next/link";
 import { Badge, Card, SectionTitle } from "@/components/ui";
 import { getServices, type ServiceSummary } from "@/lib/data/services";
-import { getT, type TFn } from "@/lib/i18n/server";
+import { getT, getLocale, type TFn } from "@/lib/i18n/server";
+import { formatWhenShort } from "@/lib/i18n/date";
 import type { ServiceState } from "@sundayplan/shared";
-
-const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-];
-
-function formatWhen(iso: string): string {
-  const d = new Date(iso);
-  const hh = String(d.getUTCHours()).padStart(2, "0");
-  const mm = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} · ${hh}:${mm}`;
-}
 
 const STATE_TONE: Record<ServiceState, "neutral" | "success" | "warning" | "info"> = {
   draft: "neutral",
@@ -42,9 +30,8 @@ function FillStatus({ s, t }: { s: ServiceSummary; t: TFn }) {
 }
 
 export default async function ServicesPage() {
-  const t = await getT();
-  const services = await getServices();
-  const upcoming = services.filter((s) => new Date(s.starts_at_utc) >= new Date()).length;
+  const [t, locale, services] = await Promise.all([getT(), getLocale(), getServices()]);
+  const upcoming = services.filter((s: ServiceSummary) => new Date(s.starts_at_utc) >= new Date()).length;
 
   return (
     <div className="space-y-6">
@@ -89,7 +76,7 @@ export default async function ServicesPage() {
                     <span className="font-medium text-ink-100">{s.name}</span>
                     <Badge tone={STATE_TONE[s.state]}>{t(`services.state.${s.state}`)}</Badge>
                   </div>
-                  <p className="mt-0.5 text-xs text-ink-500">{formatWhen(s.starts_at_utc)}</p>
+                  <p className="mt-0.5 text-xs text-ink-500">{formatWhenShort(s.starts_at_utc, locale)}</p>
                 </div>
                 <div className="flex items-center gap-5 text-xs">
                   <span className="text-ink-500">

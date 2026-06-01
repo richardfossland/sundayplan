@@ -6,7 +6,7 @@ import { AvailabilityEditor } from "@/components/availability-editor";
 import { getPerson, getPersonSchedule } from "@/lib/data/people";
 import { getMemberAvailability } from "@/lib/data/availability";
 import { setMemberStatus } from "@/app/(app)/people/actions";
-import { getT } from "@/lib/i18n/server";
+import { getT, getLocale } from "@/lib/i18n/server";
 
 const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> = {
   accepted: "success",
@@ -18,14 +18,13 @@ const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> 
 };
 
 export default async function PersonPage({ params }: { params: Promise<{ id: string }> }) {
-  const t = await getT();
-  const { id } = await params;
+  const [t, locale, { id }] = await Promise.all([getT(), getLocale(), params]);
   const person = await getPerson(id);
   if (!person) notFound();
 
   const [schedule, availability] = await Promise.all([
     getPersonSchedule(id),
-    getMemberAvailability(id),
+    getMemberAvailability(id, locale),
   ]);
 
   return (
@@ -86,7 +85,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
             </div>
             <div className="flex justify-between gap-4">
               <dt className="text-ink-500">{t("people.lastServed")}</dt>
-              <dd className="tabular-nums text-ink-300">{shortDate(person.last_served)}</dd>
+              <dd className="tabular-nums text-ink-300">{shortDate(person.last_served, locale)}</dd>
             </div>
           </dl>
         </Card>

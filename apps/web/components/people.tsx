@@ -1,14 +1,13 @@
 import Link from "next/link";
 import type { PersonRow } from "@/lib/data/people";
 import { Badge } from "@/components/ui";
-import { getT } from "@/lib/i18n/server";
+import { getT, getLocale } from "@/lib/i18n/server";
+import { formatCalendarShort } from "@/lib/i18n/date";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
-export function shortDate(iso: string | null): string {
+/** Short calendar date, e.g. "5. jan." (no) or "5 Jan" (en). Locale defaults to "no". */
+export function shortDate(iso: string | null, locale = "no"): string {
   if (!iso) return "—";
-  const [, m, d] = iso.split("-");
-  return `${Number(d)} ${MONTHS[Number(m) - 1]}`;
+  return formatCalendarShort(iso, locale);
 }
 
 const SKILL_TONE = { trainer: "gold", lead: "gold", capable: "info", training: "neutral" } as const;
@@ -23,7 +22,7 @@ export function StatusBadge({ status }: { status: PersonRow["status"] }) {
 }
 
 export async function PeopleTable({ people }: { people: PersonRow[] }) {
-  const t = await getT();
+  const [t, locale] = await Promise.all([getT(), getLocale()]);
   return (
     <div className="overflow-x-auto rounded-xl border border-white/[0.07] bg-ink-900/40">
       <table className="w-full min-w-[640px] border-collapse text-sm">
@@ -47,7 +46,7 @@ export async function PeopleTable({ people }: { people: PersonRow[] }) {
               </td>
               <td className="px-4 py-3 text-ink-400">{p.teams.join(", ")}</td>
               <td className="px-4 py-3"><SkillBadge skill={p.skill} /></td>
-              <td className="px-4 py-3 tabular-nums text-ink-400">{shortDate(p.last_served)}</td>
+              <td className="px-4 py-3 tabular-nums text-ink-400">{shortDate(p.last_served, locale)}</td>
               <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
               <td className="px-4 py-3 text-ink-500">
                 {p.phone ? <span className="font-mono text-xs">{p.phone}</span> : <span className="text-ink-600">{t("people.noPhone")}</span>}

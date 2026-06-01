@@ -4,6 +4,7 @@ import { Badge, Card, CardHeader } from "@/components/ui";
 import { ServiceEditor } from "@/components/service-editor";
 import { getService, type ServiceAssignmentRow } from "@/lib/data/services";
 import { getSongOptions } from "@/lib/data/songs";
+import { getT, type TFn } from "@/lib/i18n/server";
 import type { ServiceState } from "@sundayplan/shared";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -35,11 +36,11 @@ const STATUS_TONE: Record<string, "neutral" | "success" | "warning" | "danger" |
   declined: "danger",
 };
 
-function AssignmentList({ assignments }: { assignments: ServiceAssignmentRow[] }) {
+function AssignmentList({ assignments, t }: { assignments: ServiceAssignmentRow[]; t: TFn }) {
   if (assignments.length === 0) {
     return (
       <p className="px-5 py-6 text-center text-sm text-ink-500">
-        No one assigned yet.
+        {t("services.noOneAssigned")}
       </p>
     );
   }
@@ -54,7 +55,7 @@ function AssignmentList({ assignments }: { assignments: ServiceAssignmentRow[] }
               <p className="mt-1 text-xs italic text-ink-400">“{a.response_note}”</p>
             ) : null}
           </div>
-          <Badge tone={STATUS_TONE[a.status] ?? "neutral"}>{a.status.replace("_", " ")}</Badge>
+          <Badge tone={STATUS_TONE[a.status] ?? "neutral"}>{t(`services.assignmentStatus.${a.status}`)}</Badge>
         </li>
       ))}
     </ul>
@@ -63,6 +64,7 @@ function AssignmentList({ assignments }: { assignments: ServiceAssignmentRow[] }
 
 export default async function ServicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const t = await getT();
   const service = await getService(id);
   if (!service) notFound();
   const songs = await getSongOptions();
@@ -71,32 +73,32 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
     <div className="space-y-6">
       <div>
         <Link href="/services" className="text-xs text-ink-500 transition-colors hover:text-gold-400">
-          ← Services
+          ← {t("services.title")}
         </Link>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-semibold tracking-tight text-ink-50">{service.name}</h1>
-            <Badge tone={STATE_TONE[service.state]}>{service.state}</Badge>
+            <Badge tone={STATE_TONE[service.state]}>{t(`services.state.${service.state}`)}</Badge>
           </div>
           <div className="flex items-center gap-2">
             <Link
               href={`/services/${id}/setlist`}
               className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
             >
-              Setlist
+              {t("services.setlist")}
             </Link>
             <Link
               href={`/services/${id}/edit`}
               className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
             >
-              Edit
+              {t("common.edit")}
             </Link>
           </div>
         </div>
         <p className="mt-2 text-sm text-ink-400">
           {formatWhen(service.starts_at_utc)}
           {service.template_name ? (
-            <span className="text-ink-600"> · from {service.template_name}</span>
+            <span className="text-ink-600"> · {t("services.fromTemplate", { name: service.template_name })}</span>
           ) : null}
         </p>
         {service.notes ? (
@@ -108,23 +110,23 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
 
       <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
         <section className="space-y-3">
-          <h2 className="text-sm font-semibold tracking-tight text-ink-100">Order of service</h2>
+          <h2 className="text-sm font-semibold tracking-tight text-ink-100">{t("services.orderOfService")}</h2>
           <ServiceEditor serviceId={service.id} items={service.items} songs={songs} />
         </section>
 
         <aside className="space-y-3">
           <Card>
             <CardHeader
-              title="Assignments"
-              sub={`${service.assignments.length} placed`}
+              title={t("services.assignments")}
+              sub={t("services.placedCount", { count: service.assignments.length })}
             />
-            <AssignmentList assignments={service.assignments} />
+            <AssignmentList assignments={service.assignments} t={t} />
           </Card>
           <Link
             href="/schedule"
             className="block rounded-lg border border-white/10 px-4 py-2 text-center text-sm text-ink-200 transition-colors hover:border-white/25"
           >
-            Fill roles on the schedule →
+            {t("services.fillRoles")} →
           </Link>
         </aside>
       </div>

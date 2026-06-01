@@ -7,6 +7,7 @@
 import type { Metadata } from "next";
 import { loadAvailabilityContext } from "./actions";
 import { VolunteerAvailabilityForm } from "@/components/volunteer-availability-form";
+import { translate } from "@/lib/i18n/messages";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -50,34 +51,37 @@ export default async function AvailabilityPage({
   const result = await loadAvailabilityContext(token);
 
   if (!result.ok) {
+    // No verified member here, so fall back to the default locale.
     return (
       <Frame>
         <div className="rounded-xl border border-white/[0.07] bg-ink-900/60 px-5 py-8 text-center">
-          <p className="text-xl font-semibold text-ink-50">This link isn&apos;t valid</p>
-          <p className="mt-2 text-sm text-ink-400">
-            It may have expired or been mistyped. Ask your planner for a fresh link.
+          <p className="text-xl font-semibold text-ink-50">
+            {translate("no", "vol.avail.invalidTitle")}
           </p>
+          <p className="mt-2 text-sm text-ink-400">{translate("no", "vol.avail.invalidBody")}</p>
         </div>
       </Frame>
     );
   }
 
+  const locale = result.locale;
+
   return (
     <Frame>
       <div className="space-y-6">
         <div className="rounded-xl border border-white/[0.07] bg-ink-900/60 px-5 py-6 text-center">
-          <p className="text-sm text-ink-400">Hi {result.memberName},</p>
+          <p className="text-sm text-ink-400">
+            {translate(locale, "vol.avail.greeting", { name: result.memberName })}
+          </p>
           <p className="mt-1 text-xl font-semibold tracking-tight text-ink-50">
-            When can&apos;t you serve?
+            {translate(locale, "vol.avail.heading")}
           </p>
-          <p className="mt-2 text-sm text-ink-400">
-            Add the dates you&apos;re away and we&apos;ll leave you off the rota for them.
-          </p>
+          <p className="mt-2 text-sm text-ink-400">{translate(locale, "vol.avail.sub")}</p>
         </div>
 
-        <VolunteerAvailabilityForm token={token} blockouts={result.blockouts} />
+        <VolunteerAvailabilityForm token={token} blockouts={result.blockouts} locale={locale} />
 
-        <p className="text-center text-xs text-ink-600">No account needed — this link is just for you.</p>
+        <p className="text-center text-xs text-ink-600">{translate(locale, "vol.noAccount")}</p>
       </div>
     </Frame>
   );

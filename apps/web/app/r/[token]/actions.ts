@@ -30,6 +30,7 @@ import {
 } from "@sundayplan/auth";
 import type { AssignmentStatus, MagicLinkClaims } from "@sundayplan/shared";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isLocale, DEFAULT_LOCALE, type Locale } from "@/lib/i18n/messages";
 
 type AdminClient = ReturnType<typeof createAdminClient>;
 
@@ -68,6 +69,7 @@ export interface AssignmentContext {
   service_starts_at: string;
   church_name: string;
   respondable: boolean;
+  locale: Locale;
 }
 
 export type LoadResult =
@@ -103,7 +105,7 @@ export async function loadResponseContext(token: string): Promise<LoadResult> {
     .from("assignment")
     .select(
       "id, member_id, church_id, status, response_note, responded_at, " +
-        "member:member_id(display_name), " +
+        "member:member_id(display_name, language), " +
         "role:role_id(name, team:team_id(name)), " +
         "service:service_id(name, starts_at_utc), " +
         "church:church_id(name)",
@@ -124,6 +126,8 @@ export async function loadResponseContext(token: string): Promise<LoadResult> {
   const service = row.service as Record<string, unknown> | null;
   const church = row.church as Record<string, unknown> | null;
   const status = row.status as AssignmentStatus;
+  const memberLang = member?.language as string | undefined;
+  const locale: Locale = isLocale(memberLang) ? memberLang : DEFAULT_LOCALE;
 
   return {
     ok: true,
@@ -140,6 +144,7 @@ export async function loadResponseContext(token: string): Promise<LoadResult> {
       church_name: (church?.name as string | undefined) ?? "your church",
       // A spent single-use link is no longer respondable — show the closed state.
       respondable: isRespondable(status) && !spent,
+      locale,
     },
   };
 }

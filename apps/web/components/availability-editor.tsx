@@ -9,6 +9,7 @@ import {
 import type { AvailabilityRow } from "@/lib/data/availability";
 import type { AvailabilityKind } from "@sundayplan/shared";
 import { Card, CardHeader } from "@/components/ui";
+import { useT } from "@/lib/i18n/client";
 
 const initial: AvailabilityState = { error: null };
 
@@ -20,13 +21,14 @@ const ghostBtn =
 
 const WEEKDAYS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
-const KIND_LABEL: Record<AvailabilityKind, string> = {
-  recurring: "Recurring",
-  range: "Date range",
-  specific: "Single date",
+const KIND_LABEL_KEY: Record<AvailabilityKind, string> = {
+  recurring: "people.kindRecurring",
+  range: "people.kindRange",
+  specific: "people.kindSpecific",
 };
 
 function AddForm({ memberId }: { memberId: string }) {
+  const t = useT();
   const [state, action, pending] = useActionState(addAvailability.bind(null, memberId), initial);
   const [kind, setKind] = useState<AvailabilityKind>("specific");
 
@@ -34,25 +36,25 @@ function AddForm({ memberId }: { memberId: string }) {
     <form action={action} className="space-y-3 px-5 py-4">
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className={label}>Type</label>
+          <label className={label}>{t("people.type")}</label>
           <select
             name="kind"
             value={kind}
             onChange={(e) => setKind(e.target.value as AvailabilityKind)}
             className={`${input} w-full`}
           >
-            <option value="specific">Single date</option>
-            <option value="range">Date range</option>
-            <option value="recurring">Recurring weekday</option>
+            <option value="specific">{t("people.kindSpecific")}</option>
+            <option value="range">{t("people.kindRange")}</option>
+            <option value="recurring">{t("people.kindRecurringWeekday")}</option>
           </select>
         </div>
         {kind === "recurring" ? (
           <div>
-            <label className={label}>Weekday</label>
-            <select name="weekday" defaultValue="sunday" className={`${input} w-full capitalize`}>
+            <label className={label}>{t("people.weekday")}</label>
+            <select name="weekday" defaultValue="sunday" className={`${input} w-full`}>
               {WEEKDAYS.map((w) => (
-                <option key={w} value={w} className="capitalize">
-                  {w}
+                <option key={w} value={w}>
+                  {t(`people.weekday_${w}`)}
                 </option>
               ))}
             </select>
@@ -62,7 +64,7 @@ function AddForm({ memberId }: { memberId: string }) {
 
       {kind === "specific" ? (
         <div>
-          <label className={label}>Date</label>
+          <label className={label}>{t("people.date")}</label>
           <input name="date" type="date" required className={`${input} w-full`} />
         </div>
       ) : null}
@@ -70,11 +72,11 @@ function AddForm({ memberId }: { memberId: string }) {
       {kind === "range" ? (
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={label}>From</label>
+            <label className={label}>{t("people.from")}</label>
             <input name="from" type="date" required className={`${input} w-full`} />
           </div>
           <div>
-            <label className={label}>To</label>
+            <label className={label}>{t("people.to")}</label>
             <input name="to" type="date" required className={`${input} w-full`} />
           </div>
         </div>
@@ -82,48 +84,49 @@ function AddForm({ memberId }: { memberId: string }) {
 
       <div className="grid grid-cols-[1fr_140px] gap-3">
         <div>
-          <label className={label}>Reason (optional)</label>
-          <input name="reason" placeholder="e.g. holiday, work travel" className={`${input} w-full`} />
+          <label className={label}>{t("people.reasonOptional")}</label>
+          <input name="reason" placeholder={t("people.reasonPlaceholder")} className={`${input} w-full`} />
         </div>
         <div>
-          <label className={label}>Reason visible to</label>
+          <label className={label}>{t("people.reasonVisibleTo")}</label>
           <select name="reason_visibility" defaultValue="planner" className={`${input} w-full`}>
-            <option value="private">Private</option>
-            <option value="planner">Planners</option>
-            <option value="team">Team</option>
+            <option value="private">{t("people.visPrivate")}</option>
+            <option value="planner">{t("people.visPlanners")}</option>
+            <option value="team">{t("people.visTeam")}</option>
           </select>
         </div>
       </div>
 
       {state.error ? <p className="text-xs text-[color:var(--color-danger)]">{state.error}</p> : null}
       <button type="submit" disabled={pending} className={ghostBtn}>
-        {pending ? "Adding…" : "+ Add unavailability"}
+        {pending ? t("people.adding") : t("people.addUnavailability")}
       </button>
     </form>
   );
 }
 
 function Row({ memberId, row }: { memberId: string; row: AvailabilityRow }) {
+  const t = useT();
   const [pending, startTransition] = useTransition();
   return (
     <li className="flex items-center justify-between gap-3 px-5 py-3">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium uppercase text-ink-400">
-            {KIND_LABEL[row.kind]}
+            {t(KIND_LABEL_KEY[row.kind])}
           </span>
           <span className="text-sm text-ink-100">{row.summary}</span>
         </div>
         {row.reason ? (
           <p className="mt-0.5 text-xs text-ink-500">{row.reason}</p>
         ) : row.reason_visibility === "private" ? (
-          <p className="mt-0.5 text-xs italic text-ink-600">reason hidden</p>
+          <p className="mt-0.5 text-xs italic text-ink-600">{t("people.reasonHidden")}</p>
         ) : null}
       </div>
       <button
         onClick={() => startTransition(() => removeAvailability(memberId, row.id))}
         disabled={pending}
-        aria-label="Remove"
+        aria-label={t("people.remove")}
         className="text-ink-600 transition-colors hover:text-[color:var(--color-danger)] disabled:opacity-40"
       >
         ×
@@ -139,13 +142,12 @@ export function AvailabilityEditor({
   memberId: string;
   rows: AvailabilityRow[];
 }) {
+  const t = useT();
   return (
     <Card>
-      <CardHeader title="Unavailability" sub="When this person can't serve — feeds auto-fill + conflicts" />
+      <CardHeader title={t("people.unavailability")} sub={t("people.unavailabilitySub")} />
       {rows.length === 0 ? (
-        <p className="px-5 py-6 text-sm text-ink-500">
-          No blocks set — assumed available for every service.
-        </p>
+        <p className="px-5 py-6 text-sm text-ink-500">{t("people.noBlocks")}</p>
       ) : (
         <ul className="divide-y divide-white/[0.05]">
           {rows.map((r) => (

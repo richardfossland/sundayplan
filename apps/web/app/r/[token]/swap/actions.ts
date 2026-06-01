@@ -12,6 +12,7 @@ import type { RankedReplacement } from "@sundayplan/sdk";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifySelfServiceToken, type SelfServiceError } from "@/lib/data/volunteer-self-service";
 import { findReplacements } from "@/lib/data/swap";
+import { isLocale, DEFAULT_LOCALE, type Locale } from "@/lib/i18n/messages";
 
 export interface SwapContext {
   assignment_id: string;
@@ -24,6 +25,7 @@ export interface SwapContext {
   service_title: string;
   service_starts_at: string;
   candidates: { member_id: string; name: string; score: number; warnings: string[] }[];
+  locale: Locale;
 }
 
 export type SwapLoad = { ok: true; ctx: SwapContext } | { ok: false; error: SelfServiceError | "not_found" };
@@ -34,7 +36,7 @@ interface AssignmentRow {
   service_id: string;
   role_id: string;
   member_id: string;
-  member: { display_name: string } | null;
+  member: { display_name: string; language: string | null } | null;
   role: { name: string } | null;
   service: { name: string; starts_at_utc: string } | null;
 }
@@ -47,7 +49,7 @@ export async function loadSwapContext(token: string): Promise<SwapLoad> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("assignment")
-    .select("id, church_id, service_id, role_id, member_id, member:member_id(display_name), role:role_id(name), service:service_id(name, starts_at_utc)")
+    .select("id, church_id, service_id, role_id, member_id, member:member_id(display_name, language), role:role_id(name), service:service_id(name, starts_at_utc)")
     .eq("id", v.claims.assignment_id)
     .eq("member_id", v.claims.member_id)
     .maybeSingle();
@@ -88,6 +90,7 @@ export async function loadSwapContext(token: string): Promise<SwapLoad> {
         score: Math.round(r.score),
         warnings: r.warnings.map((w) => w.message),
       })),
+      locale: isLocale(a.member?.language) ? a.member.language : DEFAULT_LOCALE,
     },
   };
 }

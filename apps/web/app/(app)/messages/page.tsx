@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Badge, Card, SectionTitle } from "@/components/ui";
 import { listDeliveries, type DeliveryLogItem } from "@/lib/data/comms";
+import { getT } from "@/lib/i18n/server";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ function when(iso: string): string {
 }
 
 export default async function MessagesPage() {
+  const t = await getT();
   const deliveries = await listDeliveries();
   const sent = deliveries.filter((d) => d.status === "sent" || d.status === "delivered").length;
   const skipped = deliveries.filter((d) => d.status === "skipped").length;
@@ -27,41 +29,41 @@ export default async function MessagesPage() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <SectionTitle eyebrow="Communications">Messages</SectionTitle>
+        <SectionTitle eyebrow={t("messages.eyebrow")}>{t("messages.title")}</SectionTitle>
         <div className="flex items-center gap-3">
           <span className="text-sm text-ink-500">
-            {sent} sent · {skipped} skipped · {deliveries.length} total
+            {t("messages.summary", { sent, skipped, total: deliveries.length })}
           </span>
           <Link
             href="/messages/templates"
             className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
           >
-            Templates
+            {t("messages.templates")}
           </Link>
           <Link
             href="/messages/compose"
             className="rounded-lg bg-gold-400 px-3 py-1.5 text-sm font-semibold text-ink-950 transition-opacity hover:opacity-90"
           >
-            + Compose
+            {t("messages.compose")}
           </Link>
         </div>
       </div>
 
       {deliveries.length === 0 ? (
         <Card className="px-5 py-10 text-center text-sm text-ink-500">
-          No messages sent yet. Compose an invite or reminder for a service&apos;s volunteers.
+          {t("messages.empty")}
         </Card>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-white/[0.07] bg-ink-900/40">
           <table className="w-full min-w-[720px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-white/[0.07] text-left text-xs font-medium uppercase tracking-wider text-ink-500">
-                <th className="px-4 py-3">When</th>
-                <th className="px-4 py-3">Recipient</th>
-                <th className="px-4 py-3">Channel</th>
-                <th className="px-4 py-3">Service</th>
-                <th className="px-4 py-3">Purpose</th>
-                <th className="px-4 py-3">Status</th>
+                <th className="px-4 py-3">{t("messages.col.when")}</th>
+                <th className="px-4 py-3">{t("messages.col.recipient")}</th>
+                <th className="px-4 py-3">{t("messages.col.channel")}</th>
+                <th className="px-4 py-3">{t("messages.col.service")}</th>
+                <th className="px-4 py-3">{t("messages.col.purpose")}</th>
+                <th className="px-4 py-3">{t("messages.col.status")}</th>
               </tr>
             </thead>
             <tbody>
@@ -87,8 +89,7 @@ export default async function MessagesPage() {
       )}
 
       <p className="text-center text-xs text-ink-600">
-        Deliveries are recorded per recipient. The default provider is a stub (no live transport)
-        — real SMS/email/push slot in behind the SDK channel seam.
+        {t("messages.footer")}
       </p>
     </div>
   );

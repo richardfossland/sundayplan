@@ -2,12 +2,13 @@ import Link from "next/link";
 import { SectionTitle } from "@/components/ui";
 import { getServices, type ServiceSummary } from "@/lib/data/services";
 import { getChurchProfile } from "@/lib/data/settings";
+import { getT } from "@/lib/i18n/server";
 
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+const MONTH_KEYS = [
+  "jan", "feb", "mar", "apr", "may", "jun",
+  "jul", "aug", "sep", "oct", "nov", "dec",
 ];
-const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
 function parseMonth(m: string | undefined): { year: number; month: number } {
   const match = /^(\d{4})-(\d{2})$/.exec(m ?? "");
@@ -74,6 +75,7 @@ export default async function CalendarPage({
 }) {
   const { m } = await searchParams;
   const { year, month } = parseMonth(m);
+  const t = await getT();
 
   const [all, profile] = await Promise.all([getServices(), getChurchProfile()]);
   const timezone = profile?.timezone ?? "UTC";
@@ -100,39 +102,39 @@ export default async function CalendarPage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <SectionTitle eyebrow="Services">
-          {MONTHS[month]} {year}
+        <SectionTitle eyebrow={t("services.title")}>
+          {t(`services.month.${MONTH_KEYS[month]}`)} {year}
         </SectionTitle>
         <div className="flex items-center gap-2 text-sm">
           <Link
             href={`/services/calendar?m=${shift(year, month, -1)}`}
             className="rounded-lg border border-white/10 px-3 py-1.5 text-ink-200 transition-colors hover:border-white/25"
           >
-            ← Prev
+            ← {t("services.cal.prev")}
           </Link>
           <Link href="/services/calendar" className="text-ink-500 hover:text-ink-300">
-            Today
+            {t("services.cal.today")}
           </Link>
           <Link
             href={`/services/calendar?m=${shift(year, month, 1)}`}
             className="rounded-lg border border-white/10 px-3 py-1.5 text-ink-200 transition-colors hover:border-white/25"
           >
-            Next →
+            {t("services.cal.next")} →
           </Link>
           <Link
             href="/services"
             className="ml-2 rounded-lg border border-white/10 px-3 py-1.5 text-ink-200 transition-colors hover:border-white/25"
           >
-            List view
+            {t("services.cal.listView")}
           </Link>
         </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-white/[0.07] bg-ink-900/40">
         <div className="grid grid-cols-7 border-b border-white/[0.07] text-xs font-medium uppercase tracking-wider text-ink-500">
-          {WEEKDAYS.map((w) => (
+          {WEEKDAY_KEYS.map((w) => (
             <div key={w} className="px-3 py-2">
-              {w}
+              {t(`services.weekday.${w}`)}
             </div>
           ))}
         </div>
@@ -150,7 +152,7 @@ export default async function CalendarPage({
                       <span className="text-[0.7rem] tabular-nums text-ink-500">{day}</span>
                       <Link
                         href={`/services/new?date=${dateStr}`}
-                        title="New service this day"
+                        title={t("services.cal.newThisDay")}
                         className="text-[0.7rem] leading-none text-ink-600 opacity-0 transition-opacity hover:text-gold-300 group-hover/day:opacity-100"
                       >
                         +
@@ -163,7 +165,9 @@ export default async function CalendarPage({
                           href={`/services/${s.id}`}
                           className={`block truncate rounded px-1.5 py-1 text-[0.7rem] transition-colors ${chipClass(s)}`}
                           title={`${s.name} — ${time}${
-                            s.required_roles != null ? ` · ${s.filled_roles}/${s.required_roles} roles` : ""
+                            s.required_roles != null
+                              ? ` · ${t("services.rolesCount", { filled: s.filled_roles, required: s.required_roles })}`
+                              : ""
                           }`}
                         >
                           {time} {s.name}
@@ -179,8 +183,8 @@ export default async function CalendarPage({
       </div>
 
       <p className="text-center text-xs text-ink-600">
-        Times shown in {timezone}. Green = fully staffed, amber = roles still open. Tap a day&apos;s{" "}
-        <span className="text-ink-400">+</span> to plan a new service.
+        {t("services.cal.footer.before", { timezone })}{" "}
+        <span className="text-ink-400">+</span> {t("services.cal.footer.after")}
       </p>
     </div>
   );

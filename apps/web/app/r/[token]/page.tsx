@@ -14,6 +14,7 @@
 import type { Metadata } from "next";
 import { loadResponseContext, type LoadError } from "./actions";
 import { RsvpForm } from "@/components/rsvp-form";
+import { translate, type Locale } from "@/lib/i18n/messages";
 
 export const dynamic = "force-dynamic";
 
@@ -44,27 +45,12 @@ function formatWhen(iso: string): string {
   return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()} · ${hh}:${mm}`;
 }
 
-const ERROR_COPY: Record<LoadError, { title: string; body: string }> = {
-  expired: {
-    title: "This link has expired",
-    body: "Ask your planner to send you a fresh invitation.",
-  },
-  invalid: {
-    title: "This link isn't valid",
-    body: "It may have been mistyped or truncated. Open it again from your original message.",
-  },
-  wrong_purpose: {
-    title: "This link isn't valid",
-    body: "Open it again from your original invitation message.",
-  },
-  not_found: {
-    title: "We couldn't find this assignment",
-    body: "It may have been changed or removed. Check with your planner.",
-  },
-  missing_secret: {
-    title: "Responses aren't available right now",
-    body: "This SundayPlan isn't configured to accept link responses yet.",
-  },
+const ERROR_KEY: Record<LoadError, string> = {
+  expired: "vol.rsvp.err.expired",
+  invalid: "vol.rsvp.err.invalid",
+  wrong_purpose: "vol.rsvp.err.wrongPurpose",
+  not_found: "vol.rsvp.err.notFound",
+  missing_secret: "vol.rsvp.err.missingSecret",
 };
 
 function Frame({ children }: { children: React.ReactNode }) {
@@ -97,25 +83,28 @@ export default async function RespondPage({
   const result = await loadResponseContext(token);
 
   if (!result.ok) {
-    const copy = ERROR_COPY[result.error];
+    // No verified member here, so fall back to the default locale.
+    const errLocale: Locale = "no";
+    const base = ERROR_KEY[result.error];
     return (
       <Frame>
         <div className="rounded-xl border border-white/[0.07] bg-ink-900/60 px-5 py-8 text-center">
-          <p className="text-xl font-semibold text-ink-50">{copy.title}</p>
-          <p className="mt-2 text-sm text-ink-400">{copy.body}</p>
+          <p className="text-xl font-semibold text-ink-50">{translate(errLocale, `${base}.title`)}</p>
+          <p className="mt-2 text-sm text-ink-400">{translate(errLocale, `${base}.body`)}</p>
         </div>
       </Frame>
     );
   }
 
   const c = result.context;
+  const locale = c.locale;
 
   return (
     <Frame>
       <div className="space-y-6">
         <div className="rounded-xl border border-white/[0.07] bg-ink-900/60 px-5 py-6 text-center">
           <p className="text-sm text-ink-400">
-            Hi {c.volunteer_name}, {c.church_name} would like you on
+            {translate(locale, "vol.rsvp.intro", { name: c.volunteer_name, church: c.church_name })}
           </p>
           <p className="mt-1 text-2xl font-semibold tracking-tight text-ink-50">{c.role_name}</p>
           {c.team_name ? <p className="text-sm text-ink-500">{c.team_name}</p> : null}
@@ -125,10 +114,15 @@ export default async function RespondPage({
           </div>
         </div>
 
-        <RsvpForm token={token} initialStatus={c.status} respondable={c.respondable} />
+        <RsvpForm
+          token={token}
+          initialStatus={c.status}
+          respondable={c.respondable}
+          locale={locale}
+        />
 
         <p className="text-center text-xs text-ink-600">
-          No account needed — this link is just for you.
+          {translate(locale, "vol.noAccount")}
         </p>
       </div>
     </Frame>

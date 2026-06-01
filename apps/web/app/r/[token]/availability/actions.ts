@@ -10,6 +10,7 @@
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifySelfServiceToken, type SelfServiceError } from "@/lib/data/volunteer-self-service";
+import { isLocale, DEFAULT_LOCALE, type Locale } from "@/lib/i18n/messages";
 
 export interface Blockout {
   id: string;
@@ -18,7 +19,7 @@ export interface Blockout {
 }
 
 export type AvailabilityLoad =
-  | { ok: true; memberName: string; blockouts: Blockout[] }
+  | { ok: true; memberName: string; blockouts: Blockout[]; locale: Locale }
   | { ok: false; error: SelfServiceError | "not_found" };
 
 function patternLabel(kind: string, pattern: Record<string, unknown>): string {
@@ -39,7 +40,7 @@ export async function loadAvailabilityContext(token: string): Promise<Availabili
 
   const admin = createAdminClient();
   const [{ data: member }, { data: rows }] = await Promise.all([
-    admin.from("member").select("display_name").eq("id", v.claims.member_id).maybeSingle(),
+    admin.from("member").select("display_name, language").eq("id", v.claims.member_id).maybeSingle(),
     admin
       .from("availability")
       .select("id, kind, pattern, reason")
@@ -52,7 +53,10 @@ export async function loadAvailabilityContext(token: string): Promise<Availabili
     (r) => ({ id: r.id, label: patternLabel(r.kind, r.pattern), reason: r.reason }),
   );
 
-  return { ok: true, memberName: (member.display_name as string) ?? "there", blockouts };
+  const memberLang = (member as { language?: string }).language;
+  const locale: Locale = isLocale(memberLang) ? memberLang : DEFAULT_LOCALE;
+
+  return { ok: true, memberName: (member.display_name as string) ?? "there", blockouts, locale };
 }
 
 export type BlockoutResult = { ok: boolean; error?: string };

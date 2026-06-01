@@ -4,12 +4,14 @@ import { Card, SectionTitle } from "@/components/ui";
 import { TeamComposition } from "@/components/team-composition";
 import { getTeam, getTeamRoles, teamInsights } from "@/lib/data/teams";
 import { getChurchMemberOptions } from "@/lib/data/people";
+import { getT } from "@/lib/i18n/server";
 
 export default async function TeamPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const team = await getTeam(id);
   if (!team) notFound();
 
+  const t = await getT();
   const [roles, memberOptions] = await Promise.all([
     getTeamRoles(id),
     getChurchMemberOptions(),
@@ -20,7 +22,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
     <div className="space-y-6">
       <div>
         <Link href="/teams" className="text-xs text-ink-500 transition-colors hover:text-gold-400">
-          ← Teams
+          ← {t("teams.title")}
         </Link>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
           <SectionTitle>{team.name}</SectionTitle>
@@ -28,7 +30,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
             href={`/teams/${id}/edit`}
             className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
           >
-            Edit
+            {t("common.edit")}
           </Link>
         </div>
         <p className="mt-2 text-sm text-ink-400">{team.description}</p>
@@ -36,7 +38,7 @@ export default async function TeamPage({ params }: { params: Promise<{ id: strin
 
       {insights.length > 0 ? (
         <Card className="border-[color:var(--color-warning)]/25 px-5 py-4">
-          <h2 className="text-sm font-semibold text-[color:var(--color-warning)]">Coverage warnings</h2>
+          <h2 className="text-sm font-semibold text-[color:var(--color-warning)]">{t("teams.coverageWarnings")}</h2>
           <ul className="mt-2 space-y-1 text-sm text-ink-300">
             {insights.map((i, k) => (
               <li key={k} className="flex gap-2">

@@ -6,6 +6,7 @@
 import type { Metadata } from "next";
 import { loadSwapContext } from "./actions";
 import { VolunteerSwap } from "@/components/volunteer-swap";
+import { translate } from "@/lib/i18n/messages";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -55,29 +56,35 @@ export default async function SwapPage({ params }: { params: Promise<{ token: st
   const result = await loadSwapContext(token);
 
   if (!result.ok) {
+    // No verified member here, so fall back to the default locale.
     return (
       <Frame>
         <div className="rounded-xl border border-white/[0.07] bg-ink-900/60 px-5 py-8 text-center">
-          <p className="text-xl font-semibold text-ink-50">This link isn&apos;t valid</p>
-          <p className="mt-2 text-sm text-ink-400">Ask your planner for a fresh link.</p>
+          <p className="text-xl font-semibold text-ink-50">
+            {translate("no", "vol.swap.invalidTitle")}
+          </p>
+          <p className="mt-2 text-sm text-ink-400">{translate("no", "vol.swap.invalidBody")}</p>
         </div>
       </Frame>
     );
   }
 
   const c = result.ctx;
+  const locale = c.locale;
   return (
     <Frame>
       <div className="space-y-6">
         <div className="rounded-xl border border-white/[0.07] bg-ink-900/60 px-5 py-6 text-center">
-          <p className="text-sm text-ink-400">Hi {c.volunteer_name}, can&apos;t make</p>
+          <p className="text-sm text-ink-400">
+            {translate(locale, "vol.swap.intro", { name: c.volunteer_name })}
+          </p>
           <p className="mt-1 text-xl font-semibold tracking-tight text-ink-50">{c.role_name}</p>
           <p className="mt-0.5 text-sm text-ink-400">
             {c.service_title} · {formatWhen(c.service_starts_at)}
           </p>
         </div>
-        <VolunteerSwap token={token} candidates={c.candidates} />
-        <p className="text-center text-xs text-ink-600">No account needed — this link is just for you.</p>
+        <VolunteerSwap token={token} candidates={c.candidates} locale={locale} />
+        <p className="text-center text-xs text-ink-600">{translate(locale, "vol.noAccount")}</p>
       </div>
     </Frame>
   );

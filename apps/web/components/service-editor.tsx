@@ -11,19 +11,16 @@ import {
 import type { ServiceItemRow } from "@/lib/data/services";
 import type { SongOption } from "@/lib/data/songs";
 import type { ServiceItemKind } from "@sundayplan/shared";
+import { useT } from "@/lib/i18n/client";
 
-const KINDS: { value: ServiceItemKind; label: string }[] = [
-  { value: "welcome", label: "Welcome" },
-  { value: "song", label: "Song" },
-  { value: "scripture", label: "Scripture" },
-  { value: "sermon", label: "Sermon" },
-  { value: "announcement", label: "Announcement" },
-  { value: "gap", label: "Gap / transition" },
+const KIND_VALUES: ServiceItemKind[] = [
+  "welcome",
+  "song",
+  "scripture",
+  "sermon",
+  "announcement",
+  "gap",
 ];
-
-const KIND_LABEL: Record<ServiceItemKind, string> = Object.fromEntries(
-  KINDS.map((k) => [k.value, k.label]),
-) as Record<ServiceItemKind, string>;
 
 const KIND_TONE: Record<ServiceItemKind, string> = {
   welcome: "bg-sky-500/15 text-sky-300",
@@ -40,31 +37,32 @@ const label = "mb-1 block text-xs font-medium text-ink-400";
 const initial: ItemState = { error: null };
 
 function ItemFields({ item, songs }: { item?: ServiceItemRow; songs: SongOption[] }) {
+  const t = useT();
   const [kind, setKind] = useState<ServiceItemKind>(item?.kind ?? "welcome");
   return (
     <>
       <div className="grid grid-cols-[1fr_120px_110px] gap-3">
         <div>
-          <label className={label}>Label</label>
-          <input name="label" required defaultValue={item?.label ?? ""} placeholder="e.g. Worship set" className={input} />
+          <label className={label}>{t("services.item.label")}</label>
+          <input name="label" required defaultValue={item?.label ?? ""} placeholder={t("services.item.labelPlaceholder")} className={input} />
         </div>
         <div>
-          <label className={label}>Type</label>
+          <label className={label}>{t("services.item.type")}</label>
           <select
             name="kind"
             value={kind}
             onChange={(e) => setKind(e.target.value as ServiceItemKind)}
             className={input}
           >
-            {KINDS.map((k) => (
-              <option key={k.value} value={k.value}>
-                {k.label}
+            {KIND_VALUES.map((k) => (
+              <option key={k} value={k}>
+                {t(`services.kind.${k}`)}
               </option>
             ))}
           </select>
         </div>
         <div>
-          <label className={label}>Minutes</label>
+          <label className={label}>{t("services.item.minutes")}</label>
           <input
             name="duration_min"
             type="number"
@@ -77,9 +75,9 @@ function ItemFields({ item, songs }: { item?: ServiceItemRow; songs: SongOption[
       </div>
       {kind === "song" ? (
         <div>
-          <label className={label}>Song</label>
+          <label className={label}>{t("services.kind.song")}</label>
           <select name="song_id" defaultValue={item?.song_id ?? ""} className={input}>
-            <option value="">— none / not in library —</option>
+            <option value="">{t("services.item.songNone")}</option>
             {songs.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.title}
@@ -88,35 +86,36 @@ function ItemFields({ item, songs }: { item?: ServiceItemRow; songs: SongOption[
             ))}
           </select>
           {songs.length === 0 ? (
-            <p className="mt-1 text-xs text-ink-600">No songs in the library yet — add some under Songs.</p>
+            <p className="mt-1 text-xs text-ink-600">{t("services.item.noSongs")}</p>
           ) : null}
         </div>
       ) : null}
       {kind === "scripture" ? (
         <div>
-          <label className={label}>Scripture reference</label>
+          <label className={label}>{t("services.item.scriptureRef")}</label>
           <input
             name="scripture_ref"
             defaultValue={item?.scripture_ref ?? ""}
-            placeholder="e.g. John 3:16–21"
+            placeholder={t("services.item.scripturePlaceholder")}
             className={input}
           />
         </div>
       ) : null}
       <div>
-        <label className={label}>Notes</label>
-        <input name="notes" defaultValue={item?.notes ?? ""} placeholder="Optional" className={input} />
+        <label className={label}>{t("services.form.notes")}</label>
+        <input name="notes" defaultValue={item?.notes ?? ""} placeholder={t("services.item.optional")} className={input} />
       </div>
     </>
   );
 }
 
 function AddItemForm({ serviceId, songs }: { serviceId: string; songs: SongOption[] }) {
+  const t = useT();
   const bound = addServiceItem.bind(null, serviceId);
   const [state, action, pending] = useActionState(bound, initial);
   return (
     <form action={action} className="space-y-3 rounded-xl border border-dashed border-white/10 p-4">
-      <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Add to order of service</p>
+      <p className="text-xs font-medium uppercase tracking-wide text-ink-500">{t("services.item.addToOrder")}</p>
       <ItemFields songs={songs} />
       {state.error ? (
         <p className="text-xs text-[color:var(--color-danger)]">{state.error}</p>
@@ -126,7 +125,7 @@ function AddItemForm({ serviceId, songs }: { serviceId: string; songs: SongOptio
         disabled={pending}
         className="rounded-lg bg-gold-400 px-4 py-2 text-sm font-semibold text-ink-950 transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        {pending ? "Adding…" : "+ Add item"}
+        {pending ? t("services.item.adding") : t("services.item.addItem")}
       </button>
     </form>
   );
@@ -143,6 +142,7 @@ function EditItemForm({
   songs: SongOption[];
   onDone: () => void;
 }) {
+  const t = useT();
   const bound = updateServiceItem.bind(null, serviceId, item.id);
   const [state, action, pending] = useActionState(
     async (prev: ItemState, fd: FormData) => {
@@ -164,10 +164,10 @@ function EditItemForm({
           disabled={pending}
           className="rounded-lg bg-gold-400 px-4 py-2 text-sm font-semibold text-ink-950 transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {pending ? "Saving…" : "Save"}
+          {pending ? t("common.saving") : t("common.save")}
         </button>
         <button type="button" onClick={onDone} className="text-sm text-ink-500 hover:text-ink-300">
-          Cancel
+          {t("common.cancel")}
         </button>
       </div>
     </form>
@@ -187,6 +187,7 @@ function ItemRow({
   count: number;
   songs: SongOption[];
 }) {
+  const t = useT();
   const [editing, setEditing] = useState(false);
   const [pending, startTransition] = useTransition();
 
@@ -211,7 +212,7 @@ function ItemRow({
         <button
           onClick={() => move("up")}
           disabled={index === 0 || pending}
-          aria-label="Move up"
+          aria-label={t("services.item.moveUp")}
           className="text-ink-500 transition-colors hover:text-ink-200 disabled:opacity-25"
         >
           ▲
@@ -219,7 +220,7 @@ function ItemRow({
         <button
           onClick={() => move("down")}
           disabled={index === count - 1 || pending}
-          aria-label="Move down"
+          aria-label={t("services.item.moveDown")}
           className="text-ink-500 transition-colors hover:text-ink-200 disabled:opacity-25"
         >
           ▼
@@ -228,11 +229,11 @@ function ItemRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className={`rounded px-1.5 py-0.5 text-[10px] font-medium uppercase ${KIND_TONE[item.kind]}`}>
-            {KIND_LABEL[item.kind]}
+            {t(`services.kind.${item.kind}`)}
           </span>
           <span className="font-medium text-ink-100">{item.label}</span>
           {item.duration_min > 0 ? (
-            <span className="text-xs text-ink-500">{item.duration_min} min</span>
+            <span className="text-xs text-ink-500">{t("services.minutes", { min: item.duration_min })}</span>
           ) : null}
         </div>
         {songTitle ? (
@@ -245,10 +246,10 @@ function ItemRow({
       </div>
       <div className="flex shrink-0 items-center gap-3 text-xs">
         <button onClick={() => setEditing(true)} className="text-ink-400 hover:text-gold-300">
-          Edit
+          {t("common.edit")}
         </button>
         <button onClick={remove} disabled={pending} className="text-ink-500 hover:text-[color:var(--color-danger)] disabled:opacity-50">
-          Delete
+          {t("common.delete")}
         </button>
       </div>
     </div>
@@ -264,12 +265,13 @@ export function ServiceEditor({
   items: ServiceItemRow[];
   songs: SongOption[];
 }) {
+  const t = useT();
   const total = items.reduce((sum, i) => sum + i.duration_min, 0);
   return (
     <div className="space-y-3">
       {items.length === 0 ? (
         <p className="rounded-xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-ink-500">
-          No items yet. Add the first part of the service below.
+          {t("services.editor.empty")}
         </p>
       ) : (
         items.map((item, i) => (
@@ -278,7 +280,7 @@ export function ServiceEditor({
       )}
       {items.length > 0 ? (
         <p className="px-1 text-right text-xs text-ink-500">
-          Total planned: <span className="text-ink-300">{total} min</span>
+          {t("services.editor.totalPlanned")}: <span className="text-ink-300">{t("services.minutes", { min: total })}</span>
         </p>
       ) : null}
       <AddItemForm serviceId={serviceId} songs={songs} />

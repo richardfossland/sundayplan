@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import { Card, SectionTitle } from "@/components/ui";
 import { EditTemplateForm } from "@/components/template-form";
 import { getTemplateEditable } from "@/lib/data/templates";
+import { getT } from "@/lib/i18n/server";
 
 export default async function EditTemplatePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const t = await getT();
   const template = await getTemplateEditable(id);
   if (!template) notFound();
 
@@ -16,7 +18,7 @@ export default async function EditTemplatePage({ params }: { params: Promise<{ i
           ← {template.name}
         </Link>
         <div className="mt-2">
-          <SectionTitle eyebrow="Plan">Edit template</SectionTitle>
+          <SectionTitle eyebrow={t("nav.section.plan")}>{t("templates.editTemplate")}</SectionTitle>
         </div>
       </div>
       <Card className="px-5 py-5">

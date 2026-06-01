@@ -8,6 +8,7 @@ import {
   type MemberFormState,
 } from "@/app/(app)/people/actions";
 import type { MemberEditable } from "@/lib/data/people";
+import { useT } from "@/lib/i18n/client";
 
 const initial: MemberFormState = { error: null };
 
@@ -16,21 +17,22 @@ const input =
 const label = "mb-1 block text-xs font-medium text-ink-400";
 
 function MemberFields({ member }: { member?: MemberEditable }) {
+  const t = useT();
   return (
     <>
       <div>
-        <label className={label}>Name</label>
+        <label className={label}>{t("people.fieldName")}</label>
         <input
           name="display_name"
           required
           defaultValue={member?.display_name ?? ""}
-          placeholder="Full name"
+          placeholder={t("people.fullNamePlaceholder")}
           className={input}
         />
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className={label}>Phone</label>
+          <label className={label}>{t("people.phone")}</label>
           <input
             name="phone_e164"
             type="tel"
@@ -40,21 +42,21 @@ function MemberFields({ member }: { member?: MemberEditable }) {
           />
         </div>
         <div>
-          <label className={label}>Preferred channel</label>
+          <label className={label}>{t("people.preferredChannel")}</label>
           <select
             name="preferred_channel"
             defaultValue={member?.preferred_channel ?? "sms"}
             className={input}
           >
             <option value="sms">SMS</option>
-            <option value="email">Email</option>
-            <option value="push">Push</option>
+            <option value="email">{t("people.channelEmail")}</option>
+            <option value="push">{t("people.channelPush")}</option>
           </select>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className={label}>Email</label>
+          <label className={label}>{t("people.email")}</label>
           <input
             name="email"
             type="email"
@@ -64,32 +66,32 @@ function MemberFields({ member }: { member?: MemberEditable }) {
           />
         </div>
         <div>
-          <label className={label}>Status</label>
+          <label className={label}>{t("people.colStatus")}</label>
           <select name="status" defaultValue={member?.status ?? "active"} className={input}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
+            <option value="active">{t("people.statusActive")}</option>
+            <option value="inactive">{t("people.statusInactive")}</option>
           </select>
         </div>
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className={label}>Target serves / month</label>
+          <label className={label}>{t("people.targetServes")}</label>
           <input
             name="target_serves_per_month"
             type="number"
             min={0}
             max={31}
             defaultValue={member?.target_serves_per_month ?? ""}
-            placeholder="e.g. 2"
+            placeholder={t("people.targetServesPlaceholder")}
             className={input}
           />
         </div>
         <div>
-          <label className={label}>Household</label>
+          <label className={label}>{t("people.household")}</label>
           <input
             name="household"
             defaultValue={member?.household ?? ""}
-            placeholder="e.g. Hansen"
+            placeholder={t("people.householdPlaceholder")}
             className={input}
           />
         </div>
@@ -107,6 +109,7 @@ function Actions({
   submitLabel: string;
   cancelHref: string;
 }) {
+  const t = useT();
   return (
     <div className="flex items-center gap-3 pt-1">
       <button
@@ -114,10 +117,10 @@ function Actions({
         disabled={pending}
         className="rounded-lg bg-gold-400 px-4 py-2 text-sm font-semibold text-ink-950 transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        {pending ? "Saving…" : submitLabel}
+        {pending ? t("common.saving") : submitLabel}
       </button>
       <Link href={cancelHref} className="text-sm text-ink-500 hover:text-ink-300">
-        Cancel
+        {t("common.cancel")}
       </Link>
     </div>
   );
@@ -129,24 +132,26 @@ function ErrorNote({ error }: { error: string | null }) {
 }
 
 export function AddMemberForm() {
+  const t = useT();
   const [state, action, pending] = useActionState(createMember, initial);
   return (
     <form action={action} className="space-y-4">
       <MemberFields />
       <ErrorNote error={state.error} />
-      <Actions pending={pending} submitLabel="Add person" cancelHref="/people" />
+      <Actions pending={pending} submitLabel={t("people.addPerson")} cancelHref="/people" />
     </form>
   );
 }
 
 export function EditMemberForm({ member }: { member: MemberEditable }) {
+  const t = useT();
   const bound = updateMember.bind(null, member.id);
   const [state, action, pending] = useActionState(bound, initial);
   return (
     <form action={action} className="space-y-4">
       <MemberFields member={member} />
       <ErrorNote error={state.error} />
-      <Actions pending={pending} submitLabel="Save changes" cancelHref={`/people/${member.id}`} />
+      <Actions pending={pending} submitLabel={t("people.saveChanges")} cancelHref={`/people/${member.id}`} />
     </form>
   );
 }

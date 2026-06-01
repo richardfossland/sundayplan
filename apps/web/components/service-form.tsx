@@ -8,6 +8,7 @@ import {
   type ServiceFormState,
 } from "@/app/(app)/services/actions";
 import type { ServiceEditable, TemplateOption } from "@/lib/data/services";
+import { useT } from "@/lib/i18n/client";
 
 const initial: ServiceFormState = { error: null };
 
@@ -24,6 +25,7 @@ function Actions({
   submitLabel: string;
   cancelHref: string;
 }) {
+  const t = useT();
   return (
     <div className="flex items-center gap-3 pt-1">
       <button
@@ -31,10 +33,10 @@ function Actions({
         disabled={pending}
         className="rounded-lg bg-gold-400 px-4 py-2 text-sm font-semibold text-ink-950 transition-opacity hover:opacity-90 disabled:opacity-50"
       >
-        {pending ? "Saving…" : submitLabel}
+        {pending ? t("common.saving") : submitLabel}
       </button>
       <Link href={cancelHref} className="text-sm text-ink-500 hover:text-ink-300">
-        Cancel
+        {t("common.cancel")}
       </Link>
     </div>
   );
@@ -54,20 +56,21 @@ function CommonFields({
   startsAtLocal?: string;
   notes?: string | null;
 }) {
+  const t = useT();
   return (
     <>
       <div>
-        <label className={label}>Title</label>
+        <label className={label}>{t("services.form.title")}</label>
         <input
           name="name"
           required
           defaultValue={name ?? ""}
-          placeholder="e.g. Easter Sunday"
+          placeholder={t("services.form.titlePlaceholder")}
           className={input}
         />
       </div>
       <div>
-        <label className={label}>Date &amp; time</label>
+        <label className={label}>{t("services.form.dateTime")}</label>
         <input
           name="starts_at_local"
           type="datetime-local"
@@ -77,12 +80,12 @@ function CommonFields({
         />
       </div>
       <div>
-        <label className={label}>Notes</label>
+        <label className={label}>{t("services.form.notes")}</label>
         <textarea
           name="notes"
           rows={3}
           defaultValue={notes ?? ""}
-          placeholder="Anything the team should know…"
+          placeholder={t("services.form.notesPlaceholder")}
           className={input}
         />
       </div>
@@ -98,28 +101,29 @@ export function NewServiceForm({
   /** Prefilled "YYYY-MM-DDTHH:mm" when arriving from a calendar day click. */
   defaultDate?: string;
 }) {
+  const t = useT();
   const [state, action, pending] = useActionState(createService, initial);
   return (
     <form action={action} className="space-y-4">
       <CommonFields startsAtLocal={defaultDate} />
       {templates.length > 0 ? (
         <div>
-          <label className={label}>Start from template</label>
+          <label className={label}>{t("services.form.startFromTemplate")}</label>
           <select name="template_id" defaultValue="" className={input}>
-            <option value="">Blank (no template)</option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name} · {t.default_duration_min} min
+            <option value="">{t("services.form.blankNoTemplate")}</option>
+            {templates.map((tpl) => (
+              <option key={tpl.id} value={tpl.id}>
+                {tpl.name} · {t("services.minutes", { min: tpl.default_duration_min })}
               </option>
             ))}
           </select>
           <p className="mt-1 text-xs text-ink-600">
-            A template seeds the order of service; you can edit it afterwards.
+            {t("services.form.templateHint")}
           </p>
         </div>
       ) : null}
       <ErrorNote error={state.error} />
-      <Actions pending={pending} submitLabel="Create service" cancelHref="/services" />
+      <Actions pending={pending} submitLabel={t("services.form.createSubmit")} cancelHref="/services" />
     </form>
   );
 }
@@ -131,13 +135,14 @@ export function EditServiceForm({
   service: ServiceEditable;
   startsAtLocal: string;
 }) {
+  const t = useT();
   const bound = updateService.bind(null, service.id);
   const [state, action, pending] = useActionState(bound, initial);
   return (
     <form action={action} className="space-y-4">
       <CommonFields name={service.name} startsAtLocal={startsAtLocal} notes={service.notes} />
       <ErrorNote error={state.error} />
-      <Actions pending={pending} submitLabel="Save changes" cancelHref={`/services/${service.id}`} />
+      <Actions pending={pending} submitLabel={t("common.save")} cancelHref={`/services/${service.id}`} />
     </form>
   );
 }

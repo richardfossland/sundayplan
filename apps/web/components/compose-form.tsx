@@ -12,17 +12,13 @@ import type { MessageChannel } from "@sundayplan/shared";
 import { sendServiceMessage } from "@/app/(app)/messages/actions";
 import { loadServiceRecipients, type RecipientPreview } from "@/app/(app)/messages/compose/preview";
 import type { ComposeService, TemplateListItem } from "@/lib/data/comms";
+import { useT } from "@/lib/i18n/client";
 
 const input =
   "w-full rounded-lg border border-white/10 bg-ink-950/60 px-3 py-2 text-sm text-ink-100 outline-none placeholder:text-ink-600 focus:border-gold-400/50";
 const label = "mb-1 block text-xs font-medium text-ink-400";
 
-const SKIP_LABEL: Record<string, string> = {
-  no_phone: "no phone number",
-  no_email: "no email",
-  no_push_token: "no push token",
-  no_usable_channel: "no usable channel",
-};
+const SKIP_KEYS = new Set(["no_phone", "no_email", "no_push_token", "no_usable_channel"]);
 
 /**
  * Compose + preview + send flow. The preview resolves recipients in the browser
@@ -37,6 +33,7 @@ export function ComposeForm({
   services: ComposeService[];
   templates: TemplateListItem[];
 }) {
+  const t = useT();
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const [templateId, setTemplateId] = useState("");
   const [channel, setChannel] = useState<MessageChannel | "preferred">("preferred");
@@ -83,7 +80,7 @@ export function ComposeForm({
       <form action={sendServiceMessage} className="space-y-4">
         <input type="hidden" name="template_id" value={templateId} />
         <div>
-          <label className={label}>Service</label>
+          <label className={label}>{t("messages.form.service")}</label>
           <select
             name="service_id"
             value={serviceId}
@@ -104,9 +101,9 @@ export function ComposeForm({
 
         {templates.length > 0 ? (
           <div>
-            <label className={label}>Start from a template</label>
+            <label className={label}>{t("messages.form.startFromTemplate")}</label>
             <select value={templateId} onChange={(e) => applyTemplate(e.target.value)} className={input}>
-              <option value="">— none —</option>
+              <option value="">{t("messages.form.none")}</option>
               {templates.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name} ({t.channel})
@@ -118,47 +115,47 @@ export function ComposeForm({
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className={label}>Channel</label>
+            <label className={label}>{t("messages.form.channel")}</label>
             <select
               name="channel"
               value={channel}
               onChange={(e) => setChannel(e.target.value as MessageChannel | "preferred")}
               className={input}
             >
-              <option value="preferred">Each person&apos;s preferred</option>
-              <option value="sms">SMS</option>
-              <option value="email">Email</option>
-              <option value="push">Push</option>
+              <option value="preferred">{t("messages.form.channel.preferred")}</option>
+              <option value="sms">{t("messages.form.channel.sms")}</option>
+              <option value="email">{t("messages.form.channel.email")}</option>
+              <option value="push">{t("messages.form.channel.push")}</option>
             </select>
           </div>
           <div>
-            <label className={label}>Purpose</label>
+            <label className={label}>{t("messages.form.purpose")}</label>
             <select name="purpose" value={purpose} onChange={(e) => setPurpose(e.target.value)} className={input}>
-              <option value="invite">Invite</option>
-              <option value="reminder">Reminder</option>
-              <option value="final_reminder">Final reminder</option>
-              <option value="confirmation">Confirmation</option>
-              <option value="cancellation">Cancellation</option>
-              <option value="custom">Custom</option>
+              <option value="invite">{t("messages.purpose.invite")}</option>
+              <option value="reminder">{t("messages.purpose.reminder")}</option>
+              <option value="final_reminder">{t("messages.purpose.finalReminder")}</option>
+              <option value="confirmation">{t("messages.purpose.confirmation")}</option>
+              <option value="cancellation">{t("messages.purpose.cancellation")}</option>
+              <option value="custom">{t("messages.purpose.custom")}</option>
             </select>
           </div>
         </div>
 
         {channel !== "sms" ? (
           <div>
-            <label className={label}>Subject / title</label>
+            <label className={label}>{t("messages.form.subjectTitle")}</label>
             <input name="subject" value={subject} onChange={(e) => setSubject(e.target.value)} className={input} />
           </div>
         ) : null}
 
         <div>
-          <label className={label}>Body</label>
+          <label className={label}>{t("messages.form.body")}</label>
           <textarea
             name="body"
             rows={5}
             value={body}
             onChange={(e) => setBody(e.target.value)}
-            placeholder="Hi {{volunteer_name}}, you're on {{role_name}} for {{service_title}} on {{service_date}}."
+            placeholder={t("messages.form.bodyPlaceholder")}
             required
             className={input}
           />
@@ -169,27 +166,31 @@ export function ComposeForm({
           disabled={!resolved || resolved.recipients.length === 0}
           className="rounded-lg bg-gold-400 px-4 py-2 text-sm font-semibold text-ink-950 transition-opacity hover:opacity-90 disabled:opacity-40"
         >
-          Send to {resolved?.recipients.length ?? 0} recipient
-          {(resolved?.recipients.length ?? 0) === 1 ? "" : "s"}
+          {(resolved?.recipients.length ?? 0) === 1
+            ? t("messages.form.sendTo", { count: resolved?.recipients.length ?? 0 })
+            : t("messages.form.sendTo.plural", { count: resolved?.recipients.length ?? 0 })}
         </button>
       </form>
 
       <Card>
         <CardHeader
-          title="Recipients"
+          title={t("messages.recipients.title")}
           sub={
             recipients
-              ? `${resolved?.recipients.length ?? 0} will receive · ${resolved?.skipped.length ?? 0} skipped`
-              : "Pick a service to preview"
+              ? t("messages.recipients.sub", {
+                  will: resolved?.recipients.length ?? 0,
+                  skipped: resolved?.skipped.length ?? 0,
+                })
+              : t("messages.recipients.pickService")
           }
         />
         <div className="max-h-[28rem] overflow-y-auto px-5 py-4">
           {loading ? (
-            <p className="text-sm text-ink-500">Loading recipients…</p>
+            <p className="text-sm text-ink-500">{t("messages.recipients.loading")}</p>
           ) : !recipients ? (
-            <p className="text-sm text-ink-500">Select a service to load its volunteers.</p>
+            <p className="text-sm text-ink-500">{t("messages.recipients.selectService")}</p>
           ) : !resolved ? (
-            <p className="text-sm text-ink-500">Write a message body to preview each send.</p>
+            <p className="text-sm text-ink-500">{t("messages.recipients.writeBody")}</p>
           ) : (
             <div className="space-y-3">
               {resolved.recipients.map((r) => {
@@ -205,12 +206,20 @@ export function ComposeForm({
                     <p className="mt-2 whitespace-pre-wrap text-xs text-ink-300">{text}</p>
                     {sms ? (
                       <p className="mt-1 text-[0.7rem] text-ink-600">
-                        {sms.characters} chars · {sms.segments} segment{sms.segments === 1 ? "" : "s"}
+                        {sms.segments === 1
+                          ? t("messages.recipients.chars", {
+                              characters: sms.characters,
+                              segments: sms.segments,
+                            })
+                          : t("messages.recipients.chars.plural", {
+                              characters: sms.characters,
+                              segments: sms.segments,
+                            })}
                       </p>
                     ) : null}
                     {r.missing.length > 0 ? (
                       <p className="mt-1 text-[0.7rem] text-[color:var(--color-warning)]">
-                        missing: {r.missing.join(", ")}
+                        {t("messages.recipients.missing", { fields: r.missing.join(", ") })}
                       </p>
                     ) : null}
                   </div>
@@ -219,7 +228,11 @@ export function ComposeForm({
               {resolved.skipped.map((s) => (
                 <div key={s.member_id} className="flex items-center justify-between gap-2 rounded-lg border border-dashed border-white/8 px-3 py-2">
                   <span className="text-sm text-ink-400">{s.display_name}</span>
-                  <span className="text-xs text-ink-600">skipped — {SKIP_LABEL[s.reason] ?? s.reason}</span>
+                  <span className="text-xs text-ink-600">
+                    {t("messages.recipients.skipped", {
+                      reason: SKIP_KEYS.has(s.reason) ? t(`messages.skip.${s.reason}`) : s.reason,
+                    })}
+                  </span>
                 </div>
               ))}
             </div>

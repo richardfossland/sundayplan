@@ -2,18 +2,20 @@ import Link from "next/link";
 import { SectionTitle } from "@/components/ui";
 import { TeamCard } from "@/components/teams";
 import { getTeams } from "@/lib/data/teams";
+import { getT } from "@/lib/i18n/server";
 
 export default async function TeamsPage() {
   const teams = await getTeams();
+  const t = await getT();
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <SectionTitle eyebrow="Ministries">Teams</SectionTitle>
+        <SectionTitle eyebrow={t("teams.eyebrow")}>{t("teams.title")}</SectionTitle>
         <Link
           href="/teams/new"
           className="rounded-lg bg-gold-400 px-3 py-1.5 text-sm font-semibold text-ink-950 transition-opacity hover:opacity-90"
         >
-          + New team
+          {t("teams.newTeam")}
         </Link>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

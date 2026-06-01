@@ -8,31 +8,14 @@
  * to the `respond` server action and shows an inline confirmation — the visitor
  * is anonymous, no planner session involved.
  *
- * Copy is centralized in `STR` below. Norwegian + English are the launch
- * languages; full i18n (per-volunteer locale) is a follow-up — see DOMAIN.md.
+ * Copy comes from the shared i18n catalog. These public pages have no
+ * I18nProvider, so we call the pure `translate()` with the volunteer's own
+ * locale (resolved server-side from member.language and passed as a prop).
  */
 
 import { useState, useTransition } from "react";
 import { respond, type RespondOutcome } from "@/app/r/[token]/actions";
-
-const STR = {
-  prompt: "Can you serve?",
-  noteLabel: "Add a note (optional)",
-  notePlaceholder: "e.g. I can be there a bit early",
-  accept: "Yes, I'm in",
-  decline: "Sorry, can't",
-  change: "Change my answer",
-  saving: "Saving…",
-  acceptedTitle: "You're in 🎉",
-  acceptedBody: "Thanks for serving! We've let your planner know.",
-  declinedTitle: "No worries",
-  declinedBody: "Thanks for letting us know — your planner will fill the spot.",
-  unchangedAccepted: "You're already confirmed for this.",
-  unchangedDeclined: "You've already declined this one.",
-  closedTitle: "This spot is no longer open",
-  closedBody: "Your planner has updated this assignment. Nothing to do here.",
-  error: "Something went wrong. Please try the link again.",
-} as const;
+import { translate, type Locale } from "@/lib/i18n/messages";
 
 type Phase =
   | { kind: "ask" }
@@ -42,14 +25,17 @@ export function RsvpForm({
   token,
   initialStatus,
   respondable,
+  locale,
 }: {
   token: string;
   initialStatus: string;
   respondable: boolean;
+  locale: Locale;
 }) {
   const [note, setNote] = useState("");
   const [phase, setPhase] = useState<Phase>({ kind: "ask" });
   const [pending, startTransition] = useTransition();
+  const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
 
   function submit(action: "accept" | "decline") {
     startTransition(async () => {
@@ -59,12 +45,18 @@ export function RsvpForm({
   }
 
   if (phase.kind === "done") {
-    return <RsvpDone result={phase.result} onChange={() => setPhase({ kind: "ask" })} />;
+    return (
+      <RsvpDone result={phase.result} locale={locale} onChange={() => setPhase({ kind: "ask" })} />
+    );
   }
 
   if (!respondable) {
     return (
-      <Confirmation tone="neutral" title={STR.closedTitle} body={STR.closedBody} />
+      <Confirmation
+        tone="neutral"
+        title={t("vol.rsvp.closedTitle")}
+        body={t("vol.rsvp.closedBody")}
+      />
     );
   }
 
@@ -75,21 +67,23 @@ export function RsvpForm({
     <div className="space-y-5">
       {(alreadyAccepted || alreadyDeclined) && (
         <p className="rounded-lg border border-white/10 bg-ink-900/60 px-4 py-3 text-center text-sm text-ink-300">
-          {alreadyAccepted ? STR.unchangedAccepted : STR.unchangedDeclined}{" "}
-          <span className="text-ink-500">You can still change it below.</span>
+          {alreadyAccepted ? t("vol.rsvp.unchangedAccepted") : t("vol.rsvp.unchangedDeclined")}{" "}
+          <span className="text-ink-500">{t("vol.rsvp.canStillChange")}</span>
         </p>
       )}
 
-      <p className="text-center text-lg font-medium text-ink-100">{STR.prompt}</p>
+      <p className="text-center text-lg font-medium text-ink-100">{t("vol.rsvp.prompt")}</p>
 
       <div>
-        <label className="mb-1 block text-xs font-medium text-ink-400">{STR.noteLabel}</label>
+        <label className="mb-1 block text-xs font-medium text-ink-400">
+          {t("vol.rsvp.noteLabel")}
+        </label>
         <textarea
           value={note}
           onChange={(e) => setNote(e.target.value)}
           rows={2}
           maxLength={500}
-          placeholder={STR.notePlaceholder}
+          placeholder={t("vol.rsvp.notePlaceholder")}
           className="w-full rounded-lg border border-white/10 bg-ink-950/60 px-3 py-2 text-sm text-ink-100 outline-none placeholder:text-ink-600 focus:border-gold-400/50"
         />
       </div>
@@ -101,7 +95,7 @@ export function RsvpForm({
           onClick={() => submit("accept")}
           className="rounded-xl bg-gold-400 px-4 py-3 text-base font-semibold text-ink-950 transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {pending ? STR.saving : STR.accept}
+          {pending ? t("vol.rsvp.saving") : t("vol.rsvp.accept")}
         </button>
         <button
           type="button"
@@ -109,37 +103,69 @@ export function RsvpForm({
           onClick={() => submit("decline")}
           className="rounded-xl border border-white/15 px-4 py-3 text-base font-semibold text-ink-200 transition-colors hover:border-white/30 disabled:opacity-50"
         >
-          {pending ? STR.saving : STR.decline}
+          {pending ? t("vol.rsvp.saving") : t("vol.rsvp.decline")}
         </button>
       </div>
     </div>
   );
 }
 
-function RsvpDone({ result, onChange }: { result: RespondOutcome; onChange: () => void }) {
+function RsvpDone({
+  result,
+  locale,
+  onChange,
+}: {
+  result: RespondOutcome;
+  locale: Locale;
+  onChange: () => void;
+}) {
+  const t = (key: string) => translate(locale, key);
   if (!result.ok) {
-    return <Confirmation tone="danger" title={STR.error} />;
+    return <Confirmation tone="danger" title={t("vol.rsvp.error")} />;
   }
   switch (result.outcome) {
     case "accepted":
       return (
-        <Confirmation tone="success" title={STR.acceptedTitle} body={STR.acceptedBody} onChange={onChange} />
+        <Confirmation
+          tone="success"
+          title={t("vol.rsvp.acceptedTitle")}
+          body={t("vol.rsvp.acceptedBody")}
+          onChange={onChange}
+          changeLabel={t("vol.rsvp.change")}
+        />
       );
     case "declined":
       return (
-        <Confirmation tone="warning" title={STR.declinedTitle} body={STR.declinedBody} onChange={onChange} />
+        <Confirmation
+          tone="warning"
+          title={t("vol.rsvp.declinedTitle")}
+          body={t("vol.rsvp.declinedBody")}
+          onChange={onChange}
+          changeLabel={t("vol.rsvp.change")}
+        />
       );
     case "unchanged":
       return (
         <Confirmation
           tone="neutral"
-          title={result.status === "accepted" ? STR.acceptedTitle : STR.declinedTitle}
-          body={result.status === "accepted" ? STR.unchangedAccepted : STR.unchangedDeclined}
+          title={result.status === "accepted" ? t("vol.rsvp.acceptedTitle") : t("vol.rsvp.declinedTitle")}
+          body={
+            result.status === "accepted"
+              ? t("vol.rsvp.unchangedAccepted")
+              : t("vol.rsvp.unchangedDeclined")
+          }
           onChange={onChange}
+          changeLabel={t("vol.rsvp.change")}
         />
       );
     case "closed":
-      return <Confirmation tone="neutral" title={STR.closedTitle} body={STR.closedBody} />;
+      return (
+        <Confirmation
+          tone="neutral"
+          title={t("vol.rsvp.closedTitle")}
+          body={t("vol.rsvp.closedBody")}
+        />
+      );
   }
 }
 
@@ -148,11 +174,13 @@ function Confirmation({
   title,
   body,
   onChange,
+  changeLabel,
 }: {
   tone: "success" | "warning" | "danger" | "neutral";
   title: string;
   body?: string;
   onChange?: () => void;
+  changeLabel?: string;
 }) {
   const ring =
     tone === "success"
@@ -172,7 +200,7 @@ function Confirmation({
           onClick={onChange}
           className="mt-5 text-sm text-gold-400 underline-offset-4 transition-colors hover:underline"
         >
-          {STR.change}
+          {changeLabel}
         </button>
       ) : null}
     </div>

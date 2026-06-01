@@ -7,12 +7,14 @@ import {
   type PeopleFilter,
 } from "@/components/people-filters";
 import { getPeople } from "@/lib/data/people";
+import { getT } from "@/lib/i18n/server";
 
 export default async function PeoplePage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string; status?: string; team?: string; tag?: string }>;
 }) {
+  const t = await getT();
   const sp = await searchParams;
   const filter: PeopleFilter = {
     q: sp.q ?? "",
@@ -30,34 +32,38 @@ export default async function PeoplePage({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <SectionTitle eyebrow="Registry">People</SectionTitle>
+        <SectionTitle eyebrow={t("people.eyebrowRegistry")}>{t("people.title")}</SectionTitle>
         <div className="flex items-center gap-4">
           <span className="text-sm text-ink-500">
-            {active} active · {filtered.length} shown · {people.length} total
+            {t("people.countSummary", {
+              active,
+              shown: filtered.length,
+              total: people.length,
+            })}
           </span>
           <Link
             href="/people/holiday"
             className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
           >
-            Holiday
+            {t("people.holiday")}
           </Link>
           <Link
             href="/people/import"
             className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
           >
-            Import
+            {t("people.import")}
           </Link>
           <Link
             href="/people/new"
             className="rounded-lg bg-gold-400 px-3 py-1.5 text-sm font-semibold text-ink-950 transition-opacity hover:opacity-90"
           >
-            + Add person
+            {t("people.addPerson")}
           </Link>
         </div>
       </div>
       <PeopleFilters filter={filter} teams={teams} tags={tags} />
       {filtered.length === 0 ? (
-        <p className="py-12 text-center text-sm text-ink-500">No people match these filters.</p>
+        <p className="py-12 text-center text-sm text-ink-500">{t("people.emptyFiltered")}</p>
       ) : (
         <PeopleTable people={filtered} />
       )}

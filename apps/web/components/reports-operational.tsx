@@ -1,5 +1,6 @@
 import type { VolunteerBalanceReport, ServiceCoverageReport } from "@sundayplan/sdk";
 import { Badge, Card, StatTile } from "@/components/ui";
+import type { TFn } from "@/lib/i18n/server";
 
 function deltaCell(delta: number | null) {
   if (delta == null) return <span className="text-ink-600">—</span>;
@@ -8,22 +9,22 @@ function deltaCell(delta: number | null) {
   return <span className="tabular-nums text-[color:var(--color-success)]">0</span>;
 }
 
-export function VolunteerBalanceTable({ report }: { report: VolunteerBalanceReport }) {
+export function VolunteerBalanceTable({ report, t }: { report: VolunteerBalanceReport; t: TFn }) {
   return (
     <section className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight text-ink-50">Volunteer balance</h2>
+        <h2 className="text-lg font-semibold tracking-tight text-ink-50">{t("reports.balance.heading")}</h2>
         <p className="mt-1 max-w-2xl text-xs text-ink-500">
-          Who's carrying the load over {report.months} month{report.months === 1 ? "" : "s"}. Expected =
-          target/month × months; delta flags <strong className="text-ink-300">over-served</strong> (＋, burnout
-          risk) and under-served (−).
+          {report.months === 1
+            ? t("reports.balance.blurb.one", { count: report.months })
+            : t("reports.balance.blurb.other", { count: report.months })}
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <StatTile label="Total serves" value={report.totals.serves} />
-        <StatTile label="Active volunteers" value={report.totals.activeVolunteers} />
-        <StatTile label="Avg / volunteer" value={report.totals.averageServes.toFixed(1)} />
+        <StatTile label={t("reports.balance.stat.totalServes")} value={report.totals.serves} />
+        <StatTile label={t("reports.balance.stat.activeVolunteers")} value={report.totals.activeVolunteers} />
+        <StatTile label={t("reports.balance.stat.avgPerVolunteer")} value={report.totals.averageServes.toFixed(1)} />
       </div>
 
       <Card>
@@ -31,12 +32,12 @@ export function VolunteerBalanceTable({ report }: { report: VolunteerBalanceRepo
           <table className="w-full min-w-[560px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-white/[0.07] text-left text-xs font-medium uppercase tracking-wider text-ink-500">
-                <th className="px-4 py-3">Volunteer</th>
-                <th className="px-4 py-3 text-right">Serves</th>
-                <th className="px-4 py-3 text-right">Services</th>
-                <th className="px-4 py-3 text-right">Target/mo</th>
-                <th className="px-4 py-3 text-right">Expected</th>
-                <th className="px-4 py-3 text-right">Δ</th>
+                <th className="px-4 py-3">{t("reports.balance.col.volunteer")}</th>
+                <th className="px-4 py-3 text-right">{t("reports.balance.col.serves")}</th>
+                <th className="px-4 py-3 text-right">{t("reports.balance.col.services")}</th>
+                <th className="px-4 py-3 text-right">{t("reports.balance.col.targetPerMonth")}</th>
+                <th className="px-4 py-3 text-right">{t("reports.balance.col.expected")}</th>
+                <th className="px-4 py-3 text-right">{t("reports.balance.col.delta")}</th>
               </tr>
             </thead>
             <tbody>
@@ -53,7 +54,7 @@ export function VolunteerBalanceTable({ report }: { report: VolunteerBalanceRepo
               {report.lines.length === 0 && (
                 <tr>
                   <td colSpan={6} className="px-4 py-8 text-center text-sm text-ink-500">
-                    No serves in this range.
+                    {t("reports.balance.empty")}
                   </td>
                 </tr>
               )}
@@ -65,23 +66,21 @@ export function VolunteerBalanceTable({ report }: { report: VolunteerBalanceRepo
   );
 }
 
-export function ServiceCoverageTable({ report }: { report: ServiceCoverageReport }) {
+export function ServiceCoverageTable({ report, t }: { report: ServiceCoverageReport; t: TFn }) {
   const pct = Math.round(report.totals.coverage * 100);
   return (
     <section className="space-y-4">
       <div>
-        <h2 className="text-lg font-semibold tracking-tight text-ink-50">Service coverage</h2>
-        <p className="mt-1 max-w-2xl text-xs text-ink-500">
-          Required role slots (from each service's template) vs filled. Gaps are the roles still short.
-        </p>
+        <h2 className="text-lg font-semibold tracking-tight text-ink-50">{t("reports.coverage.heading")}</h2>
+        <p className="mt-1 max-w-2xl text-xs text-ink-500">{t("reports.coverage.blurb")}</p>
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="Coverage" value={`${pct}%`} tone={pct >= 100 ? "gold" : "neutral"} />
-        <StatTile label="Slots filled" value={`${report.totals.filledSlots}/${report.totals.requiredSlots}`} />
-        <StatTile label="Fully covered" value={report.totals.fullyCovered} />
+        <StatTile label={t("reports.coverage.stat.coverage")} value={`${pct}%`} tone={pct >= 100 ? "gold" : "neutral"} />
+        <StatTile label={t("reports.coverage.stat.slotsFilled")} value={`${report.totals.filledSlots}/${report.totals.requiredSlots}`} />
+        <StatTile label={t("reports.coverage.stat.fullyCovered")} value={report.totals.fullyCovered} />
         <StatTile
-          label="With gaps"
+          label={t("reports.coverage.stat.withGaps")}
           value={report.totals.servicesWithGaps}
           tone={report.totals.servicesWithGaps > 0 ? "warning" : "neutral"}
         />
@@ -92,11 +91,11 @@ export function ServiceCoverageTable({ report }: { report: ServiceCoverageReport
           <table className="w-full min-w-[620px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-white/[0.07] text-left text-xs font-medium uppercase tracking-wider text-ink-500">
-                <th className="px-4 py-3">Service</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3 text-right">Filled</th>
-                <th className="px-4 py-3 text-right">Coverage</th>
-                <th className="px-4 py-3">Gaps</th>
+                <th className="px-4 py-3">{t("reports.coverage.col.service")}</th>
+                <th className="px-4 py-3">{t("reports.coverage.col.date")}</th>
+                <th className="px-4 py-3 text-right">{t("reports.coverage.col.filled")}</th>
+                <th className="px-4 py-3 text-right">{t("reports.coverage.col.coverage")}</th>
+                <th className="px-4 py-3">{t("reports.coverage.col.gaps")}</th>
               </tr>
             </thead>
             <tbody>
@@ -112,7 +111,7 @@ export function ServiceCoverageTable({ report }: { report: ServiceCoverageReport
                   </td>
                   <td className="px-4 py-3">
                     {l.gaps.length === 0 ? (
-                      <Badge tone="success">covered</Badge>
+                      <Badge tone="success">{t("reports.coverage.covered")}</Badge>
                     ) : (
                       <span className="flex flex-wrap gap-1">
                         {l.gaps.map((g) => (
@@ -128,7 +127,7 @@ export function ServiceCoverageTable({ report }: { report: ServiceCoverageReport
               {report.lines.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-sm text-ink-500">
-                    No templated services in this range. Coverage needs services created from a template.
+                    {t("reports.coverage.empty")}
                   </td>
                 </tr>
               )}

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { SectionTitle } from "@/components/ui";
 import { TemplateMessageForm } from "@/components/template-message-form";
 import { getTemplate } from "@/lib/data/comms";
+import { getT } from "@/lib/i18n/server";
 import { updateTemplate } from "../../../actions";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +12,7 @@ export default async function EditTemplatePage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const t = await getT();
   const { id } = await params;
   const template = await getTemplate(id);
   if (!template) notFound();
@@ -20,8 +22,8 @@ export default async function EditTemplatePage({
 
   return (
     <div className="space-y-6">
-      <SectionTitle eyebrow="Communications">Edit template</SectionTitle>
-      <TemplateMessageForm template={template} action={action} submitLabel="Save changes" />
+      <SectionTitle eyebrow={t("messages.eyebrow")}>{t("messages.template.editTitle")}</SectionTitle>
+      <TemplateMessageForm template={template} action={action} submitLabel={t("messages.template.saveChanges")} />
     </div>
   );
 }

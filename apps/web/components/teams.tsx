@@ -1,10 +1,12 @@
 import Link from "next/link";
 import type { TeamSummary } from "@/lib/data/teams";
+import { getT } from "@/lib/i18n/server";
 
 const FALLBACK_ACCENT = "var(--color-gold-400)";
 
-export function TeamCard({ team }: { team: TeamSummary }) {
+export async function TeamCard({ team }: { team: TeamSummary }) {
   const accent = team.color ?? FALLBACK_ACCENT;
+  const t = await getT();
   return (
     <Link
       href={`/teams/${team.id}`}
@@ -17,8 +19,8 @@ export function TeamCard({ team }: { team: TeamSummary }) {
       </div>
       <p className="mt-2 text-sm leading-relaxed text-ink-400">{team.description}</p>
       <div className="mt-4 flex gap-4 text-xs text-ink-500">
-        <span><span className="tabular-nums text-ink-200">{team.member_count}</span> members</span>
-        <span><span className="tabular-nums text-ink-200">{team.role_count}</span> roles</span>
+        <span><span className="tabular-nums text-ink-200">{team.member_count}</span> {t("teams.members")}</span>
+        <span><span className="tabular-nums text-ink-200">{team.role_count}</span> {t("teams.roles")}</span>
       </div>
     </Link>
   );

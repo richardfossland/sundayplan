@@ -6,6 +6,7 @@ import { AvailabilityEditor } from "@/components/availability-editor";
 import { getPerson, getPersonSchedule } from "@/lib/data/people";
 import { getMemberAvailability } from "@/lib/data/availability";
 import { setMemberStatus } from "@/app/(app)/people/actions";
+import { getT } from "@/lib/i18n/server";
 
 const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> = {
   accepted: "success",
@@ -17,6 +18,7 @@ const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> 
 };
 
 export default async function PersonPage({ params }: { params: Promise<{ id: string }> }) {
+  const t = await getT();
   const { id } = await params;
   const person = await getPerson(id);
   if (!person) notFound();
@@ -30,7 +32,7 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
     <div className="space-y-6">
       <div>
         <Link href="/people" className="text-xs text-ink-500 transition-colors hover:text-gold-400">
-          ← People
+          ← {t("people.title")}
         </Link>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
@@ -44,18 +46,18 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
               href={`/people/${id}/edit`}
               className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-200 transition-colors hover:border-white/25"
             >
-              Edit
+              {t("common.edit")}
             </Link>
             {person.status === "archived" ? (
               <form action={setMemberStatus.bind(null, id, "active")}>
                 <button className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-300 transition-colors hover:border-white/25">
-                  Reactivate
+                  {t("people.reactivate")}
                 </button>
               </form>
             ) : (
               <form action={setMemberStatus.bind(null, id, "archived")}>
                 <button className="rounded-lg border border-[color:var(--color-danger)]/30 px-3 py-1.5 text-sm text-[color:var(--color-danger)] transition-colors hover:border-[color:var(--color-danger)]/60">
-                  Archive
+                  {t("people.archive")}
                 </button>
               </form>
             )}
@@ -72,27 +74,30 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="px-5 py-4 lg:col-span-1">
-          <h2 className="text-sm font-semibold text-ink-100">Contact</h2>
+          <h2 className="text-sm font-semibold text-ink-100">{t("people.contact")}</h2>
           <dl className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between gap-4">
-              <dt className="text-ink-500">Phone</dt>
+              <dt className="text-ink-500">{t("people.phone")}</dt>
               <dd className="font-mono text-ink-200">{person.phone ?? "—"}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-ink-500">Preferred</dt>
+              <dt className="text-ink-500">{t("people.preferred")}</dt>
               <dd className="uppercase text-ink-300">{person.channel}</dd>
             </div>
             <div className="flex justify-between gap-4">
-              <dt className="text-ink-500">Last served</dt>
+              <dt className="text-ink-500">{t("people.lastServed")}</dt>
               <dd className="tabular-nums text-ink-300">{shortDate(person.last_served)}</dd>
             </div>
           </dl>
         </Card>
 
         <Card className="lg:col-span-2">
-          <CardHeader title="Upcoming assignments" sub={`${schedule.length} on the next four Sundays`} />
+          <CardHeader
+            title={t("people.upcomingAssignments")}
+            sub={t("people.nextFourSundays", { n: schedule.length })}
+          />
           {schedule.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-ink-500">No upcoming assignments.</p>
+            <p className="px-5 py-6 text-sm text-ink-500">{t("people.noUpcoming")}</p>
           ) : (
             <ul className="divide-y divide-white/[0.05]">
               {schedule.map((a, i) => (

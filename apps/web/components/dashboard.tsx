@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Conflict, ProposedAssignment, UnfilledSlot } from "@sundayplan/sdk";
 import { Badge, Card, CardHeader, ScoreBar } from "@/components/ui";
 
@@ -9,7 +10,46 @@ const RULE_LABEL: Record<string, string> = {
   skill_gap: "Skill gap",
   unfilled_near_deadline: "Unfilled slot",
   consecutive_sundays: "Consecutive Sundays",
+  family_conflict: "Family clash",
+  key_person_unavailable: "Lead unavailable",
 };
+
+type TFn = (key: string, vars?: Record<string, string | number>) => string;
+
+// The fix each rule points the planner toward — every CTA jumps to the exact
+// cell in the schedule grid, where the assign picker / remove tools live.
+const RULE_ACTION: Record<string, string> = {
+  double_booking: "Reassign",
+  unavailable: "Reassign",
+  same_day: "Review",
+  over_max_per_month: "Rebalance",
+  skill_gap: "Pick trained",
+  unfilled_near_deadline: "Fill slot",
+  consecutive_sundays: "Rebalance",
+  family_conflict: "Review",
+  key_person_unavailable: "Review",
+};
+
+// i18n key per action, used when a `t` is supplied (English map above is the fallback).
+const RULE_ACTION_KEY: Record<string, string> = {
+  double_booking: "conflict.action.reassign",
+  unavailable: "conflict.action.reassign",
+  same_day: "conflict.action.review",
+  over_max_per_month: "conflict.action.rebalance",
+  skill_gap: "conflict.action.pickTrained",
+  unfilled_near_deadline: "conflict.action.fillSlot",
+  consecutive_sundays: "conflict.action.rebalance",
+  family_conflict: "conflict.action.review",
+  key_person_unavailable: "conflict.action.review",
+};
+
+/** Deep-link to the offending cell: `?focus` drives the highlight, `#` scrolls. */
+function resolveHref(c: Conflict): string | null {
+  if (!c.service_id) return null;
+  const key = c.role_id ? `${c.service_id}:${c.role_id}` : c.service_id;
+  const hash = c.role_id ? `#cell-${c.service_id}-${c.role_id}` : "";
+  return `/schedule?focus=${encodeURIComponent(key)}${hash}`;
+}
 
 const UNFILLED_REASON: Record<string, string> = {
   no_eligible_candidates: "No eligible candidates",
@@ -71,29 +111,41 @@ export function ConflictPanel({
   conflicts,
   roleNames,
   memberNames,
+  t,
 }: {
   conflicts: Conflict[];
   roleNames: Record<string, string>;
   memberNames: Record<string, string>;
+  /** When provided, labels are localised; otherwise English (admin fallback). */
+  t?: TFn;
 }) {
   const hard = conflicts.filter((c) => c.severity === "hard").length;
+  const actionLabel = (rule: string) =>
+    t ? t(RULE_ACTION_KEY[rule] ?? "conflict.action.resolve") : RULE_ACTION[rule] ?? "Resolve";
   return (
     <Card>
       <CardHeader
-        title="Conflict checks"
-        sub={`${conflicts.length} found across the schedule`}
-        action={hard > 0 ? <Badge tone="danger">{hard} hard</Badge> : <Badge tone="success">no hard conflicts</Badge>}
+        title={t ? t("conflict.title") : "Conflict checks"}
+        sub={t ? t("conflict.found", { count: conflicts.length }) : `${conflicts.length} found across the schedule`}
+        action={
+          hard > 0 ? (
+            <Badge tone="danger">{t ? t("conflict.hard", { count: hard }) : `${hard} hard`}</Badge>
+          ) : (
+            <Badge tone="success">{t ? t("conflict.noHard") : "no hard conflicts"}</Badge>
+          )
+        }
       />
       <ul className="divide-y divide-white/[0.05]">
         {conflicts.map((c, i) => {
           const who = c.member_id ? memberNames[c.member_id] ?? c.member_id : null;
           const role = c.role_id ? roleNames[c.role_id] ?? c.role_id : null;
+          const href = resolveHref(c);
           return (
             <li key={i} className="flex items-start gap-3 px-5 py-3.5">
               <span className="mt-0.5">
                 <Badge tone={c.severity === "hard" ? "danger" : "warning"}>{RULE_LABEL[c.rule] ?? c.rule}</Badge>
               </span>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm text-ink-200">{c.message}</p>
                 {(who || role) && (
                   <p className="mt-0.5 text-xs text-ink-500">
@@ -101,9 +153,22 @@ export function ConflictPanel({
                   </p>
                 )}
               </div>
+              {href ? (
+                <Link
+                  href={href}
+                  className="shrink-0 rounded-md bg-white/[0.06] px-2.5 py-1 text-xs text-ink-200 transition-colors hover:bg-gold-400/90 hover:text-ink-950"
+                >
+                  {actionLabel(c.rule)} →
+                </Link>
+              ) : null}
             </li>
           );
         })}
+        {conflicts.length === 0 ? (
+          <li className="px-5 py-6 text-center text-sm text-ink-500">
+            {t ? t("conflict.clear") : "No conflicts — you're clear to send."}
+          </li>
+        ) : null}
       </ul>
     </Card>
   );

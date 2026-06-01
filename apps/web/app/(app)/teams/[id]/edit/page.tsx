@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Card, SectionTitle } from "@/components/ui";
 import { EditTeamForm } from "@/components/team-form";
 import { getTeam } from "@/lib/data/teams";
+import { getT } from "@/lib/i18n/server";
 
 export default async function EditTeamPage({
   params,
@@ -12,6 +13,8 @@ export default async function EditTeamPage({
   const { id } = await params;
   const team = await getTeam(id);
   if (!team) notFound();
+
+  const t = await getT();
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
@@ -23,7 +26,7 @@ export default async function EditTeamPage({
           ← {team.name}
         </Link>
         <div className="mt-2">
-          <SectionTitle eyebrow="Ministries">Edit team</SectionTitle>
+          <SectionTitle eyebrow={t("teams.eyebrow")}>{t("teams.editTeam")}</SectionTitle>
         </div>
       </div>
       <Card className="px-5 py-5">

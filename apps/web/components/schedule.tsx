@@ -1,6 +1,7 @@
 import type { Conflict } from "@sundayplan/sdk";
 import type { EligibleMember, GridCell, GridRole, GridService } from "@/lib/data/schedule";
 import { ScheduleCell } from "@/components/schedule-cell";
+import { CopyWeek } from "@/components/copy-week";
 
 type Tone = "success" | "warning" | "danger" | "neutral";
 
@@ -23,6 +24,7 @@ export function ScheduleGrid({
   memberNames,
   eligibleByRole,
   requiredByServiceRole,
+  focus,
 }: {
   services: GridService[];
   roles: GridRole[];
@@ -31,6 +33,8 @@ export function ScheduleGrid({
   memberNames: Record<string, string>;
   eligibleByRole: Record<string, EligibleMember[]>;
   requiredByServiceRole: Record<string, number>;
+  /** "serviceId:roleId" of a cell to highlight (from a conflict "Resolve" CTA). */
+  focus?: string;
 }) {
   const cellsAt = (s: string, r: string) =>
     cells.filter((c) => c.service_id === s && c.role_id === r);
@@ -81,6 +85,7 @@ export function ScheduleGrid({
                   <div className={`mt-0.5 text-[0.7rem] tabular-nums ${full ? "text-[color:var(--color-success)]" : "text-ink-500"}`}>
                     {cov.filled}/{cov.total} filled
                   </div>
+                  <CopyWeek targetId={s.id} services={services} />
                 </th>
               );
             })}
@@ -99,8 +104,15 @@ export function ScheduleGrid({
                   member_id: c.member_id,
                   status: c.status,
                 }));
+                const focused = focus === `${s.id}:${role.id}`;
                 return (
-                  <td key={s.id} className="px-4 py-3 align-top">
+                  <td
+                    key={s.id}
+                    id={`cell-${s.id}-${role.id}`}
+                    className={
+                      "px-4 py-3 align-top scroll-mt-24 " +
+                      (focused ? "rounded-md ring-2 ring-gold-400/70 ring-inset" : "")
+                    }>
                     <ScheduleCell
                       serviceId={s.id}
                       roleId={role.id}

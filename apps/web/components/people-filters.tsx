@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { PersonRow } from "@/lib/data/people";
+import { getT } from "@/lib/i18n/server";
 
 export interface PeopleFilter {
   q: string;
@@ -23,7 +24,7 @@ export function applyPeopleFilter(people: PersonRow[], f: PeopleFilter): PersonR
 const control =
   "rounded-lg border border-white/10 bg-ink-950/60 px-3 py-2 text-sm text-ink-100 outline-none focus:border-gold-400/50";
 
-export function PeopleFilters({
+export async function PeopleFilters({
   filter,
   teams,
   tags,
@@ -32,18 +33,19 @@ export function PeopleFilters({
   teams: string[];
   tags: string[];
 }) {
+  const t = await getT();
   const active = filter.q || filter.status || filter.team || filter.tag;
   return (
     <form method="GET" className="flex flex-wrap items-end gap-2">
-      <input name="q" defaultValue={filter.q} placeholder="Search name…" className={control} />
+      <input name="q" defaultValue={filter.q} placeholder={t("people.searchNamePlaceholder")} className={control} />
       <select name="status" defaultValue={filter.status} className={control}>
-        <option value="">Any status</option>
-        <option value="active">Active</option>
-        <option value="inactive">Inactive</option>
-        <option value="archived">Archived</option>
+        <option value="">{t("people.anyStatus")}</option>
+        <option value="active">{t("people.statusActive")}</option>
+        <option value="inactive">{t("people.statusInactive")}</option>
+        <option value="archived">{t("people.statusArchived")}</option>
       </select>
       <select name="team" defaultValue={filter.team} className={control}>
-        <option value="">Any team</option>
+        <option value="">{t("people.anyTeam")}</option>
         {teams.map((t) => (
           <option key={t} value={t}>
             {t}
@@ -51,7 +53,7 @@ export function PeopleFilters({
         ))}
       </select>
       <select name="tag" defaultValue={filter.tag} className={control}>
-        <option value="">Any tag</option>
+        <option value="">{t("people.anyTag")}</option>
         {tags.map((t) => (
           <option key={t} value={t}>
             {t}
@@ -62,11 +64,11 @@ export function PeopleFilters({
         type="submit"
         className="rounded-lg border border-white/10 px-3 py-2 text-sm text-ink-200 transition-colors hover:border-white/25"
       >
-        Filter
+        {t("people.filter")}
       </button>
       {active ? (
         <Link href="/people" className="self-center text-sm text-ink-500 hover:text-ink-300">
-          Clear
+          {t("people.clear")}
         </Link>
       ) : null}
     </form>

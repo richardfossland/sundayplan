@@ -3,12 +3,14 @@ import { notFound } from "next/navigation";
 import { Card, SectionTitle } from "@/components/ui";
 import { EditMemberForm } from "@/components/member-form";
 import { getMemberEditable } from "@/lib/data/people";
+import { getT } from "@/lib/i18n/server";
 
 export default async function EditPersonPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const t = await getT();
   const { id } = await params;
   const member = await getMemberEditable(id);
   if (!member) notFound();
@@ -23,7 +25,7 @@ export default async function EditPersonPage({
           ← {member.display_name}
         </Link>
         <div className="mt-2">
-          <SectionTitle eyebrow="Registry">Edit person</SectionTitle>
+          <SectionTitle eyebrow={t("people.eyebrowRegistry")}>{t("people.editPerson")}</SectionTitle>
         </div>
       </div>
       <Card className="px-5 py-5">

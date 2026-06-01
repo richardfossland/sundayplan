@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { Card, SectionTitle } from "@/components/ui";
 import { EditServiceForm } from "@/components/service-form";
 import { getServiceEditable } from "@/lib/data/services";
+import { getT } from "@/lib/i18n/server";
 
 export default async function EditServicePage({
   params,
@@ -10,6 +11,7 @@ export default async function EditServicePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const t = await getT();
   const service = await getServiceEditable(id);
   if (!service) notFound();
 
@@ -24,7 +26,7 @@ export default async function EditServicePage({
           ← {service.name}
         </Link>
         <div className="mt-2">
-          <SectionTitle eyebrow="Plan">Edit service</SectionTitle>
+          <SectionTitle eyebrow={t("nav.section.plan")}>{t("services.editService")}</SectionTitle>
         </div>
       </div>
       <Card className="px-5 py-5">

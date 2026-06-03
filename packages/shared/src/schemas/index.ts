@@ -319,6 +319,107 @@ export const DeliveryInputSchema = z.object({
   cost_cents: z.number().int().min(0).optional().nullable(),
 });
 
+// ── OAuth sign-up (Phase 1.3) ──────────────────────────────────────────────────
+// Planner onboarding via Supabase's built-in OAuth providers. The pure, network-
+// free pieces live here so the client sign-up page AND the server callback route
+// share one validated set of providers + the same redirect/error logic, and so
+// it's all unit-testable without a Supabase instance. No secrets touch this
+// module — provider credentials are configured in Supabase, not in code.
+
+/**
+ * The OAuth providers we expose on the sign-up screen. Supabase supports these
+ * out of the box; local dev stubs them so the flow is testable without keys.
+ * Keep this list in lock-step with the buttons rendered in the sign-up page.
+ */
+export const OAuthProvider = z.enum(["github", "google", "apple"]);
+export type OAuthProviderName = z.infer<typeof OAuthProvider>;
+
+export const OAUTH_PROVIDERS: readonly OAuthProviderName[] = [
+  "github",
+  "google",
+  "apple",
+] as const;
+
+/** Human-facing label for each provider button. */
+export const OAUTH_PROVIDER_LABELS: Record<OAuthProviderName, string> = {
+  github: "GitHub",
+  google: "Google",
+  apple: "Apple",
+};
+
+/**
+ * Validate a `?provider=X` query param (from a redirect back to sign-up or from
+ * a button click). Returns the canonical provider name or `null` if unknown —
+ * the caller decides whether to ignore it or surface an error.
+ */
+export function parseOAuthProvider(raw: string | null | undefined): OAuthProviderName | null {
+  const r = OAuthProvider.safeParse(raw);
+  return r.success ? r.data : null;
+}
+
+/** Where Supabase sends the browser after the provider authenticates the user. */
+export const OAUTH_CALLBACK_PATH = "/auth/callback";
+
+/**
+ * Build the absolute `redirectTo` URL handed to `signInWithOAuth`. The provider
+ * bounces back to our callback route, which exchanges the code for a session and
+ * then forwards to `next` (defaults to `/`, where the app layout decides between
+ * onboarding and the dashboard). `next` is sanitised to a same-origin path so an
+ * attacker can't smuggle an open-redirect through the query string.
+ */
+export function buildOAuthRedirectTo(origin: string, next = "/"): string {
+  const base = origin.replace(/\/+$/, "");
+  const safeNext = sanitizeNextPath(next);
+  return `${base}${OAUTH_CALLBACK_PATH}?next=${encodeURIComponent(safeNext)}`;
+}
+
+/**
+ * Coerce a post-auth `next` target to a safe, same-origin absolute path. Anything
+ * that isn't a single leading-slash path (protocol-relative `//evil`, absolute
+ * URLs, backslashes) collapses to `/`.
+ */
+export function sanitizeNextPath(next: string | null | undefined): string {
+  if (!next || typeof next !== "string") return "/";
+  if (!next.startsWith("/")) return "/";
+  if (next.startsWith("//") || next.startsWith("/\\")) return "/";
+  return next;
+}
+
+/**
+ * Map a Supabase / provider OAuth error code (carried as `?error=` or
+ * `?error_code=` on the callback) to a short, user-facing message. Unknown codes
+ * fall back to a generic line so we never render raw provider jargon.
+ */
+export function oauthErrorMessage(code: string | null | undefined): string | null {
+  if (!code) return null;
+  switch (code) {
+    case "access_denied":
+      return "Sign-up was cancelled. You can try again or use email and password.";
+    case "provider_email_needs_verification":
+    case "email_not_confirmed":
+      return "Your provider account's email isn't verified yet. Verify it, then try again.";
+    case "server_error":
+    case "temporarily_unavailable":
+      return "The sign-in provider is temporarily unavailable. Please try again shortly.";
+    default:
+      return "We couldn't complete sign-up with that provider. Please try again.";
+  }
+}
+
+/**
+ * A planner account needs a verified email before it can own a church (it's how
+ * we reach them for licensing + billing). OAuth identities carry the provider's
+ * `email_verified` flag; some providers (e.g. GitHub with a private/unverified
+ * email) hand back an unverified address. This guards that mandatory field.
+ */
+export function isEmailVerifiedIdentity(
+  identity: { email?: string | null; email_verified?: boolean | null } | null | undefined,
+): boolean {
+  if (!identity) return false;
+  if (!identity.email) return false;
+  return identity.email_verified === true;
+}
+
 // ── Reports (Phase 11) ────────────────────────────────────────────────────────
 
 /**

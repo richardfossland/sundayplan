@@ -12,6 +12,15 @@ import {
   ServiceInputSchema,
   ServiceItemInputSchema,
   SongInputSchema,
+  OAuthProvider,
+  OAUTH_PROVIDERS,
+  OAUTH_PROVIDER_LABELS,
+  OAUTH_CALLBACK_PATH,
+  parseOAuthProvider,
+  buildOAuthRedirectTo,
+  sanitizeNextPath,
+  oauthErrorMessage,
+  isEmailVerifiedIdentity,
   isoDate,
   isoDateTime,
   localeCode,
@@ -185,5 +194,116 @@ describe("DeliveryInputSchema", () => {
     });
     expect(d.status).toBe("skipped");
     expect(d.skip_reason).toBe("no usable channel");
+  });
+});
+
+// ── OAuth sign-up (Phase 1.3) ──────────────────────────────────────────────────
+
+describe("OAuthProvider", () => {
+  it("accepts the three supported providers", () => {
+    expect(OAuthProvider.safeParse("github").success).toBe(true);
+    expect(OAuthProvider.safeParse("google").success).toBe(true);
+    expect(OAuthProvider.safeParse("apple").success).toBe(true);
+  });
+
+  it("rejects unsupported providers", () => {
+    expect(OAuthProvider.safeParse("facebook").success).toBe(false);
+    expect(OAuthProvider.safeParse("").success).toBe(false);
+  });
+
+  it("the canonical list and labels stay in lock-step with the enum", () => {
+    expect([...OAUTH_PROVIDERS]).toEqual(["github", "google", "apple"]);
+    expect(Object.keys(OAUTH_PROVIDER_LABELS).sort()).toEqual([...OAUTH_PROVIDERS].sort());
+    for (const p of OAUTH_PROVIDERS) {
+      expect(OAuthProvider.safeParse(p).success).toBe(true);
+    }
+  });
+});
+
+describe("parseOAuthProvider", () => {
+  it("returns the canonical provider for valid input", () => {
+    expect(parseOAuthProvider("github")).toBe("github");
+    expect(parseOAuthProvider("google")).toBe("google");
+  });
+
+  it("returns null for unknown / missing values", () => {
+    expect(parseOAuthProvider(null)).toBeNull();
+    expect(parseOAuthProvider(undefined)).toBeNull();
+    expect(parseOAuthProvider("GITHUB")).toBeNull();
+    expect(parseOAuthProvider("twitter")).toBeNull();
+  });
+});
+
+describe("sanitizeNextPath", () => {
+  it("passes through same-origin absolute paths", () => {
+    expect(sanitizeNextPath("/")).toBe("/");
+    expect(sanitizeNextPath("/onboarding")).toBe("/onboarding");
+    expect(sanitizeNextPath("/services?x=1")).toBe("/services?x=1");
+  });
+
+  it("collapses open-redirect attempts to /", () => {
+    expect(sanitizeNextPath("//evil.com")).toBe("/");
+    expect(sanitizeNextPath("/\\evil.com")).toBe("/");
+    expect(sanitizeNextPath("https://evil.com")).toBe("/");
+    expect(sanitizeNextPath("evil.com")).toBe("/");
+    expect(sanitizeNextPath("")).toBe("/");
+    expect(sanitizeNextPath(null)).toBe("/");
+    expect(sanitizeNextPath(undefined)).toBe("/");
+  });
+});
+
+describe("buildOAuthRedirectTo", () => {
+  it("targets the callback route and carries an encoded next param", () => {
+    expect(buildOAuthRedirectTo("https://plan.example.com")).toBe(
+      "https://plan.example.com/auth/callback?next=%2F",
+    );
+    expect(buildOAuthRedirectTo("https://plan.example.com", "/onboarding")).toBe(
+      "https://plan.example.com/auth/callback?next=%2Fonboarding",
+    );
+  });
+
+  it("trims trailing slashes from the origin and uses the shared callback path", () => {
+    const url = buildOAuthRedirectTo("https://plan.example.com///", "/services");
+    expect(url).toContain(`https://plan.example.com${OAUTH_CALLBACK_PATH}`);
+    expect(url).not.toContain("com//auth");
+  });
+
+  it("refuses to embed an open-redirect via next", () => {
+    expect(buildOAuthRedirectTo("https://x.test", "//evil.com")).toBe(
+      "https://x.test/auth/callback?next=%2F",
+    );
+  });
+});
+
+describe("oauthErrorMessage", () => {
+  it("returns null when there is no error code", () => {
+    expect(oauthErrorMessage(null)).toBeNull();
+    expect(oauthErrorMessage(undefined)).toBeNull();
+    expect(oauthErrorMessage("")).toBeNull();
+  });
+
+  it("maps known codes to friendly copy", () => {
+    expect(oauthErrorMessage("access_denied")).toMatch(/cancelled/i);
+    expect(oauthErrorMessage("provider_email_needs_verification")).toMatch(/verif/i);
+    expect(oauthErrorMessage("server_error")).toMatch(/unavailable/i);
+  });
+
+  it("falls back to a generic message for unknown codes", () => {
+    expect(oauthErrorMessage("weird_code")).toMatch(/couldn't complete/i);
+  });
+});
+
+describe("isEmailVerifiedIdentity", () => {
+  it("is true only when an email is present and verified", () => {
+    expect(isEmailVerifiedIdentity({ email: "a@b.com", email_verified: true })).toBe(true);
+  });
+
+  it("rejects unverified, missing, or absent emails", () => {
+    expect(isEmailVerifiedIdentity({ email: "a@b.com", email_verified: false })).toBe(false);
+    expect(isEmailVerifiedIdentity({ email: "a@b.com", email_verified: null })).toBe(false);
+    expect(isEmailVerifiedIdentity({ email: null, email_verified: true })).toBe(false);
+    expect(isEmailVerifiedIdentity({ email_verified: true })).toBe(false);
+    expect(isEmailVerifiedIdentity(null)).toBe(false);
+    expect(isEmailVerifiedIdentity(undefined)).toBe(false);
   });
 });

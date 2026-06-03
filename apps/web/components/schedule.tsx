@@ -25,6 +25,7 @@ export function ScheduleGrid({
   eligibleByRole,
   requiredByServiceRole,
   focus,
+  guidance,
 }: {
   services: GridService[];
   roles: GridRole[];
@@ -35,6 +36,12 @@ export function ScheduleGrid({
   requiredByServiceRole: Record<string, number>;
   /** "serviceId:roleId" of a cell to highlight (from a conflict "Resolve" CTA). */
   focus?: string;
+  /**
+   * Warmer, planner-facing intro line (Phase 9 NL polish). Optional so the grid
+   * still renders fine without it; shown only when something is actually
+   * flagged, so it reads as guidance rather than noise.
+   */
+  guidance?: string;
 }) {
   const cellsAt = (s: string, r: string) =>
     cells.filter((c) => c.service_id === s && c.role_id === r);
@@ -68,8 +75,14 @@ export function ScheduleGrid({
     return soft ? "soft" : null;
   };
 
+  const flagged = conflicts.length > 0;
+
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/[0.07] bg-ink-900/40">
+    <div className="space-y-3">
+      {guidance && flagged ? (
+        <p className="text-xs text-ink-400">{guidance}</p>
+      ) : null}
+      <div className="overflow-x-auto rounded-xl border border-white/[0.07] bg-ink-900/40">
       <table className="w-full min-w-[640px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-white/[0.07]">
@@ -137,6 +150,7 @@ export function ScheduleGrid({
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

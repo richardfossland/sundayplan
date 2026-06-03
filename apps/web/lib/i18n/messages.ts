@@ -116,6 +116,13 @@ const en: Catalog = {
   "schedule.title": "Schedule",
   "schedule.footer":
     "Conflict markers come straight from detectConflicts() in @sundayplan/sdk — run live against this church's rota.",
+  // Phase 9 — warmer guidance for the auto-fill flow. These are the offline
+  // fallbacks; an optional Claude refiner can polish the per-slot rationale at
+  // runtime (see refineBreakdown in @sundayplan/sdk).
+  "autofill.cta": "Auto-fill gaps",
+  "autofill.busy": "Finding the best fit…",
+  "autofill.tooltip": "We'll suggest the best-matched volunteer for each open slot — you stay in control and review the draft before anything is sent.",
+  "schedule.guidance": "We've drafted who fits each slot best. Anything flagged below is worth a second look before you invite.",
 
   // Common
   "common.church": "Your church",
@@ -849,6 +856,10 @@ const no: Catalog = {
   "schedule.title": "Vaktliste",
   "schedule.footer":
     "Konfliktmarkørene kommer direkte fra detectConflicts() i @sundayplan/sdk — kjøres live mot menighetens vaktliste.",
+  "autofill.cta": "Fyll åpne roller",
+  "autofill.busy": "Finner beste match…",
+  "autofill.tooltip": "Vi foreslår den best egnede frivillige for hver åpne rolle — du har kontrollen og ser over utkastet før noe sendes.",
+  "schedule.guidance": "Vi har laget et utkast over hvem som passer best i hver rolle. Det som er flagget nedenfor er verdt en ekstra titt før du inviterer.",
 
   // Common
   "common.church": "Din menighet",

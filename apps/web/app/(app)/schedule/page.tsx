@@ -37,6 +37,7 @@ export default async function SchedulePage({
           eligibleByRole={eligibleByRole}
           requiredByServiceRole={requiredByServiceRole}
           focus={focus}
+          guidance={t("schedule.guidance")}
         />
       </div>
       <div className="lg:hidden">

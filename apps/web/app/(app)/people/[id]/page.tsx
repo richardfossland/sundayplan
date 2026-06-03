@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Card, CardHeader, SectionTitle } from "@/components/ui";
-import { SkillBadge, StatusBadge, shortDate } from "@/components/people";
+import { SkillBadge, StatusBadge, shortDate } from "@/components/people-ui";
 import { AvailabilityEditor } from "@/components/availability-editor";
 import { getPerson, getPersonSchedule } from "@/lib/data/people";
 import { getMemberAvailability } from "@/lib/data/availability";

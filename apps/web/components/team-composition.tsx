@@ -12,7 +12,7 @@ import {
 } from "@/app/(app)/teams/actions";
 import type { TeamRoleGroup } from "@/lib/data/teams";
 import type { MemberOption } from "@/lib/data/people";
-import { SkillBadge } from "@/components/people";
+import { SkillBadge } from "@/components/people-ui";
 import { Card, CardHeader } from "@/components/ui";
 import { useT } from "@/lib/i18n/client";
 

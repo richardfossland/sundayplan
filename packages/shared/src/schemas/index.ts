@@ -223,7 +223,7 @@ export const AssignmentResponseSchema = z.object({
 // ── Magic-link issuance ─────────────────────────────────────────────────────
 
 export const MagicLinkPurpose = z.enum([
-  "assignment_response", "availability_set", "swap_request", "generic",
+  "assignment_response", "availability_set", "swap_request", "generic", "church_invite",
 ]);
 
 export const MagicLinkIssueSchema = z.object({
@@ -232,6 +232,46 @@ export const MagicLinkIssueSchema = z.object({
   assignment_id: uuid.optional().nullable(),
   /** Time-to-live in seconds — defaults to 7 days */
   ttl_seconds: z.number().int().min(60).max(60 * 60 * 24 * 30).default(60 * 60 * 24 * 7),
+});
+
+// ── Church invites (Phase 1.3) ──────────────────────────────────────────────────
+// A planner onboards co-planners by minting a signed invite link tied to a church
+// + a role, then copy-pastes it (no email/SMS provider needed). The recipient
+// signs in / signs up, lands on the accept page, and a `church_member` row is
+// created with the invited role. Unlike volunteer magic-links these are NOT
+// member-scoped — the invitee has no `member` row, they become a planner-side
+// `church_member`. The roles below are exactly the planner-side roles that can be
+// granted via an invite (`viewer` isn't invitable — viewers are added directly).
+
+/** The church_member roles a planner may grant through an invite link. */
+export const ChurchInviteRole = z.enum(["admin", "planner", "team_lead"]);
+export type ChurchInviteRoleName = z.infer<typeof ChurchInviteRole>;
+
+/** Validate a `role` value from a form/query; returns the role or `null`. */
+export function parseChurchInviteRole(
+  raw: string | null | undefined,
+): ChurchInviteRoleName | null {
+  const r = ChurchInviteRole.safeParse(raw);
+  return r.success ? r.data : null;
+}
+
+/** Human-facing label for each invitable role. */
+export const CHURCH_INVITE_ROLE_LABELS: Record<ChurchInviteRoleName, string> = {
+  admin: "Admin",
+  planner: "Planner",
+  team_lead: "Team lead",
+};
+
+export const ChurchInviteIssueSchema = z.object({
+  church_id: uuid,
+  role: ChurchInviteRole.default("planner"),
+  /** Time-to-live in seconds — defaults to 14 days (an onboarding window). */
+  ttl_seconds: z
+    .number()
+    .int()
+    .min(60)
+    .max(60 * 60 * 24 * 30)
+    .default(60 * 60 * 24 * 14),
 });
 
 // ── Communications (Phase 6) ──────────────────────────────────────────────────

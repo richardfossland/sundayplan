@@ -15,7 +15,12 @@
  * `used_at` on first use. This module owns signing, expiry, and tamper-checking.
  */
 
-import type { MagicLinkClaims, MagicLinkPurpose } from "@sundayplan/shared";
+import type {
+  ChurchInviteClaims,
+  ChurchInviteRole,
+  MagicLinkClaims,
+  MagicLinkPurpose,
+} from "@sundayplan/shared";
 
 const HEADER = { alg: "HS256", typ: "JWT" } as const;
 const textEncoder = new TextEncoder();
@@ -84,6 +89,92 @@ export async function verifyMagicLink(
     return { ok: false, reason: "expired" };
   }
   return { ok: true, claims };
+}
+
+// ── Church invites (Phase 1.3) ───────────────────────────────────────────────
+// A planner-facing variant of the magic link: it onboards a co-planner rather
+// than authorizing a no-account volunteer. It is NOT member-scoped — the invitee
+// has no `member` row; the token carries a church + the role to grant, and the
+// accept page creates a `church_member` after the invitee has an account. Same
+// HS256/secret/hashing machinery so single-use + expiry tracking is identical.
+
+export interface InviteIssueOptions {
+  church_id: string;
+  role: ChurchInviteRole;
+  /** Token lifetime in seconds (e.g. 14 days = 1209600). */
+  ttl_seconds: number;
+  /** Override the issue time (unix seconds) — for tests/determinism. */
+  now?: number;
+  /** Override the nonce — defaults to a random UUID. */
+  jti?: string;
+}
+
+export type VerifyInviteResult =
+  | { ok: true; claims: ChurchInviteClaims }
+  | { ok: false; reason: "malformed" | "bad_signature" | "expired" | "wrong_purpose" };
+
+export async function signChurchInvite(
+  opts: InviteIssueOptions,
+  secret: string,
+): Promise<string> {
+  const iat = opts.now ?? nowSeconds();
+  const claims: ChurchInviteClaims = {
+    church_id: opts.church_id,
+    role: opts.role,
+    purpose: "church_invite",
+    iat,
+    exp: iat + opts.ttl_seconds,
+    jti: opts.jti ?? crypto.randomUUID(),
+  };
+  const signingInput = `${b64urlString(JSON.stringify(HEADER))}.${b64urlString(JSON.stringify(claims))}`;
+  const sig = await hmac(signingInput, secret);
+  return `${signingInput}.${b64urlBytes(sig)}`;
+}
+
+export async function verifyChurchInvite(
+  token: string,
+  secret: string,
+  now?: number,
+): Promise<VerifyInviteResult> {
+  const parts = token.split(".");
+  if (parts.length !== 3) return { ok: false, reason: "malformed" };
+  const [header, body, sig] = parts;
+  const signingInput = `${header}.${body}`;
+
+  let signatureValid: boolean;
+  try {
+    const key = await hmacKey(secret);
+    signatureValid = await crypto.subtle.verify("HMAC", key, fromB64url(sig), textEncoder.encode(signingInput));
+  } catch {
+    return { ok: false, reason: "malformed" };
+  }
+  if (!signatureValid) return { ok: false, reason: "bad_signature" };
+
+  let claims: ChurchInviteClaims;
+  try {
+    claims = JSON.parse(textDecoder.decode(fromB64url(body))) as ChurchInviteClaims;
+  } catch {
+    return { ok: false, reason: "malformed" };
+  }
+  // Reject a token that isn't actually an invite (e.g. a volunteer RSVP token)
+  // before trusting its church_id/role.
+  if (claims.purpose !== "church_invite" || !claims.church_id || !claims.role) {
+    return { ok: false, reason: "wrong_purpose" };
+  }
+  if (typeof claims.exp !== "number" || claims.exp < (now ?? nowSeconds())) {
+    return { ok: false, reason: "expired" };
+  }
+  return { ok: true, claims };
+}
+
+/**
+ * Absolute URL a planner copy-pastes to invite a co-planner. The token encodes
+ * church + role, so the path carries only the token; the join page reads
+ * everything trustworthy from inside the verified claim.
+ */
+export function buildInviteLink(baseUrl: string, token: string): string {
+  const origin = baseUrl.replace(/\/+$/, "");
+  return `${origin}/r/${encodeURIComponent(token)}/join`;
 }
 
 /**

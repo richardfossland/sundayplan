@@ -12,6 +12,10 @@ import {
   ServiceInputSchema,
   ServiceItemInputSchema,
   SongInputSchema,
+  ChurchInviteRole,
+  ChurchInviteIssueSchema,
+  parseChurchInviteRole,
+  CHURCH_INVITE_ROLE_LABELS,
   OAuthProvider,
   OAUTH_PROVIDERS,
   OAUTH_PROVIDER_LABELS,
@@ -290,6 +294,66 @@ describe("oauthErrorMessage", () => {
 
   it("falls back to a generic message for unknown codes", () => {
     expect(oauthErrorMessage("weird_code")).toMatch(/couldn't complete/i);
+  });
+});
+
+// ── Church invites (Phase 1.3) ──────────────────────────────────────────────────
+
+describe("ChurchInviteRole", () => {
+  it("accepts only the invitable planner-side roles", () => {
+    expect(ChurchInviteRole.safeParse("admin").success).toBe(true);
+    expect(ChurchInviteRole.safeParse("planner").success).toBe(true);
+    expect(ChurchInviteRole.safeParse("team_lead").success).toBe(true);
+  });
+
+  it("rejects viewer (added directly, not via invite) and unknowns", () => {
+    expect(ChurchInviteRole.safeParse("viewer").success).toBe(false);
+    expect(ChurchInviteRole.safeParse("owner").success).toBe(false);
+    expect(ChurchInviteRole.safeParse("").success).toBe(false);
+  });
+
+  it("labels stay in lock-step with the enum", () => {
+    for (const role of ["admin", "planner", "team_lead"] as const) {
+      expect(ChurchInviteRole.safeParse(role).success).toBe(true);
+      expect(CHURCH_INVITE_ROLE_LABELS[role]).toBeTruthy();
+    }
+    expect(Object.keys(CHURCH_INVITE_ROLE_LABELS).sort()).toEqual(
+      ["admin", "planner", "team_lead"],
+    );
+  });
+});
+
+describe("parseChurchInviteRole", () => {
+  it("returns the canonical role for valid input", () => {
+    expect(parseChurchInviteRole("admin")).toBe("admin");
+    expect(parseChurchInviteRole("team_lead")).toBe("team_lead");
+  });
+
+  it("returns null for unknown / missing / non-invitable values", () => {
+    expect(parseChurchInviteRole("viewer")).toBeNull();
+    expect(parseChurchInviteRole(null)).toBeNull();
+    expect(parseChurchInviteRole(undefined)).toBeNull();
+    expect(parseChurchInviteRole("ADMIN")).toBeNull();
+  });
+});
+
+describe("ChurchInviteIssueSchema", () => {
+  it("defaults role to planner and TTL to 14 days", () => {
+    const m = ChurchInviteIssueSchema.parse({ church_id: UUID });
+    expect(m.role).toBe("planner");
+    expect(m.ttl_seconds).toBe(60 * 60 * 24 * 14);
+  });
+
+  it("requires a uuid church_id and bounds the TTL", () => {
+    expect(ChurchInviteIssueSchema.safeParse({ church_id: "not-a-uuid" }).success).toBe(false);
+    expect(ChurchInviteIssueSchema.safeParse({ church_id: UUID, ttl_seconds: 10 }).success).toBe(false);
+    expect(
+      ChurchInviteIssueSchema.safeParse({ church_id: UUID, ttl_seconds: 60 * 60 * 24 * 60 }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a non-invitable role", () => {
+    expect(ChurchInviteIssueSchema.safeParse({ church_id: UUID, role: "viewer" }).success).toBe(false);
   });
 });
 

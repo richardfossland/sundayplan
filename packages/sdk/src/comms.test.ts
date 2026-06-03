@@ -198,6 +198,32 @@ describe("daysBetween", () => {
     expect(daysBetween(at("2026-09-01T00:00:00Z"), at("2026-09-08T00:00:00Z"))).toBe(7);
     expect(daysBetween(at("2026-09-01T12:00:00Z"), at("2026-09-02T06:00:00Z"))).toBe(0);
   });
+
+  it("counts elapsed UTC milliseconds, immune to a wall-clock DST shift", () => {
+    // Europe/Oslo springs forward 2026-03-29 (CEST starts). The two instants are
+    // exactly 7 * 24h apart in real (UTC) time even though the local clock jumped
+    // an hour — daysBetween works on getTime() so it must still report 7, not 6.
+    const beforeDst = at("2026-03-26T10:00:00Z");
+    const afterDst = at("2026-04-02T10:00:00Z");
+    expect(daysBetween(beforeDst, afterDst)).toBe(7);
+
+    // Autumn fall-back (2026-10-25, CEST→CET) — the extra hour must not bump the
+    // floored day count up either.
+    const beforeFall = at("2026-10-22T10:00:00Z");
+    const afterFall = at("2026-10-29T10:00:00Z");
+    expect(daysBetween(beforeFall, afterFall)).toBe(7);
+  });
+
+  it("returns a negative count when `to` precedes `from`", () => {
+    expect(daysBetween(at("2026-09-08T00:00:00Z"), at("2026-09-01T00:00:00Z"))).toBe(-7);
+  });
+
+  it("floors a partial-day gap to 0, and never rounds up across a sub-day boundary", () => {
+    // 23h59m apart but spanning midnight: still 0 whole days.
+    expect(daysBetween(at("2026-09-01T00:01:00Z"), at("2026-09-02T00:00:00Z"))).toBe(0);
+    // exactly 24h → 1.
+    expect(daysBetween(at("2026-09-01T00:00:00Z"), at("2026-09-02T00:00:00Z"))).toBe(1);
+  });
 });
 
 describe("dueMessages", () => {
@@ -255,5 +281,85 @@ describe("dueMessages", () => {
   it("is deterministic — same inputs, same output", () => {
     const input = { now: at("2026-09-06T09:00:00Z"), service_starts_at: service, invite_sent: true };
     expect(dueMessages(input)).toEqual(dueMessages(input));
+  });
+
+  // ── Boundary / off-by-one hardening ─────────────────────────────────────────
+
+  it("fires a same-day (0-day) reminder window without treating the service as past", () => {
+    // now is a few hours before the service on the same UTC day → daysUntil == 0.
+    const cadence = { ...DEFAULT_CADENCE, reminder_days_before: [0], final_reminder_days_before: -1 };
+    const due = dueMessages({
+      now: at("2026-09-13T06:00:00Z"),
+      service_starts_at: service,
+      invite_sent: true,
+      cadence,
+    });
+    expect(due.map((m) => m.purpose)).toEqual(["reminder"]);
+    expect(due[0].days_until_service).toBe(0);
+  });
+
+  it("fires a same-day (0-day) final reminder when the final window collapses to today", () => {
+    const cadence = { ...DEFAULT_CADENCE, reminder_days_before: [], final_reminder_days_before: 0 };
+    const due = dueMessages({
+      now: at("2026-09-13T06:00:00Z"),
+      service_starts_at: service,
+      invite_sent: true,
+      cadence,
+    });
+    expect(due.map((m) => m.purpose)).toEqual(["final_reminder"]);
+    expect(due[0].days_until_service).toBe(0);
+  });
+
+  it("treats just-started (daysUntil 0 by flooring) as still due, but a fully-past service as silent", () => {
+    // 09:00 service, now 09:30 same day: getTime diff is negative → daysUntil -1 → past.
+    const justAfter = dueMessages({
+      now: at("2026-09-13T09:30:00Z"),
+      service_starts_at: service,
+    });
+    expect(justAfter).toEqual([]);
+    // now 00:30 same day: still ahead of the 09:00 service → daysUntil 0 → invite due.
+    const sameDayBefore = dueMessages({
+      now: at("2026-09-13T00:30:00Z"),
+      service_starts_at: service,
+    });
+    expect(sameDayBefore.map((m) => m.purpose)).toContain("invite");
+  });
+
+  it("keeps reminder windows correct across a spring-forward DST boundary", () => {
+    // Service the Sunday after Oslo springs forward; reminder 7 days before.
+    const dstService = at("2026-04-05T09:00:00Z");
+    const due = dueMessages({
+      now: at("2026-03-29T09:00:00Z"), // 7 UTC-days before, the DST-shift day itself
+      service_starts_at: dstService,
+      invite_sent: true,
+    });
+    expect(due.map((m) => m.purpose)).toEqual(["reminder"]);
+    expect(due[0].days_until_service).toBe(7);
+  });
+
+  it("emits only the final reminder when a day is both a reminder window and the final window", () => {
+    // daysUntil 1 is in reminder_days_before AND equals final_reminder_days_before.
+    const cadence = { ...DEFAULT_CADENCE, reminder_days_before: [7, 1], final_reminder_days_before: 1 };
+    const due = dueMessages({
+      now: at("2026-09-12T09:00:00Z"), // 1 day before
+      service_starts_at: service,
+      invite_sent: true,
+      cadence,
+    });
+    expect(due.map((m) => m.purpose)).toEqual(["final_reminder"]);
+  });
+
+  it("falls back to the standard reminder when the final reminder was already sent on a shared window", () => {
+    // Same shared window, but final_reminder already sent → the final guard fails
+    // and the else-if path emits the still-unsent standard reminder instead.
+    const cadence = { ...DEFAULT_CADENCE, reminder_days_before: [1], final_reminder_days_before: 1 };
+    const due = dueMessages({
+      now: at("2026-09-12T09:00:00Z"),
+      service_starts_at: service,
+      invite_sent: true,
+      already_sent: ["final_reminder"],
+      cadence,
+    });
+    expect(due.map((m) => m.purpose)).toEqual(["reminder"]);
   });
 });

@@ -26,6 +26,12 @@ function SignUpForm() {
   const [loading, setLoading] = useState(false);
   const [oauthBusy, setOauthBusy] = useState<schemas.OAuthProviderName | null>(null);
 
+  // Where to land after sign-up: a sanitised same-origin path (e.g. the invite
+  // path `/r/<token>/join`, carried by the invite link) or `/` so the `(app)`
+  // layout decides between onboarding and the dashboard.
+  const next = schemas.sanitizeNextPath(searchParams.get("next"));
+  const signInHref = next === "/" ? "/sign-in" : `/sign-in?next=${encodeURIComponent(next)}`;
+
   // Surface a provider error bounced back from the OAuth callback (`?error=`).
   useEffect(() => {
     const msg = schemas.oauthErrorMessage(searchParams.get("error"));
@@ -35,7 +41,6 @@ function SignUpForm() {
   async function onOAuth(provider: schemas.OAuthProviderName) {
     setError(null);
     setOauthBusy(provider);
-    const next = schemas.sanitizeNextPath(searchParams.get("next"));
     const { error } = await createClient().auth.signInWithOAuth({
       provider,
       options: { redirectTo: schemas.buildOAuthRedirectTo(window.location.origin, next) },
@@ -60,7 +65,7 @@ function SignUpForm() {
     // Local dev typically auto-confirms; if a confirmation email is required,
     // there's no session yet.
     if (data.session) {
-      router.push("/");
+      router.push(next);
       router.refresh();
     } else {
       setNotice("Check your email to confirm your account, then sign in.");
@@ -122,7 +127,7 @@ function SignUpForm() {
       </div>
       <p className="mt-4 text-center text-xs text-ink-500">
         Already have an account?{" "}
-        <Link href="/sign-in" className="text-gold-300 hover:underline">
+        <Link href={signInHref} className="text-gold-300 hover:underline">
           Sign in
         </Link>
       </p>

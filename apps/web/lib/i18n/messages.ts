@@ -601,6 +601,17 @@ const en: Catalog = {
   "settings.team.blurb": "Teams, roles and skill levels live in their own section.",
   "settings.team.manage": "Manage teams →",
 
+  // Settings — church invite links
+  "settings.invite.title": "Invite a co-planner",
+  "settings.invite.sub": "Create a link, paste it to whoever should help plan",
+  "settings.invite.role": "Role to grant",
+  "settings.invite.roleHint": "What the invitee can do once they join.",
+  "settings.invite.create": "Create invite link",
+  "settings.invite.ready": "Share this {role} invite link — it works once:",
+  "settings.invite.copy": "Copy",
+  "settings.invite.copied": "Copied!",
+  "settings.invite.expiryHint": "The link expires in 14 days and can be used once.",
+
   // Settings — church profile form
   "settings.church.title": "Church",
   "settings.church.sub": "Plan: {plan} · /{slug}",
@@ -1419,6 +1430,17 @@ const no: Catalog = {
   "settings.team.sub": "Hvem kan gjøre hva, og ferdighetsnivåene auto-fyll bruker",
   "settings.team.blurb": "Team, roller og ferdighetsnivåer ligger i sin egen seksjon.",
   "settings.team.manage": "Administrer team →",
+
+  // Settings — church invite links
+  "settings.invite.title": "Inviter en medplanlegger",
+  "settings.invite.sub": "Lag en lenke og lim den inn til den som skal hjelpe til med planleggingen",
+  "settings.invite.role": "Rolle å gi",
+  "settings.invite.roleHint": "Hva den inviterte kan gjøre etter at de blir med.",
+  "settings.invite.create": "Lag invitasjonslenke",
+  "settings.invite.ready": "Del denne {role}-invitasjonslenken — den virker én gang:",
+  "settings.invite.copy": "Kopier",
+  "settings.invite.copied": "Kopiert!",
+  "settings.invite.expiryHint": "Lenken utløper om 14 dager og kan brukes én gang.",
 
   // Settings — church profile form
   "settings.church.title": "Menighet",

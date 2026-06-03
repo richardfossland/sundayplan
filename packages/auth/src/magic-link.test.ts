@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { schemas } from "@sundayplan/shared";
 import {
   signMagicLink,
   tokenHash,
@@ -184,6 +185,49 @@ describe("buildInviteLink", () => {
   it("url-encodes a token that contains reserved characters", () => {
     const link = buildInviteLink("https://x.test", "a/b+c");
     expect(link).toBe("https://x.test/r/a%2Fb%2Bc/join");
+  });
+});
+
+describe("invite join bounce-back flow", () => {
+  // The join page (/r/<token>/join) builds `next` = the join path itself and
+  // hands it to /sign-in?next=… and /sign-up?next=…; after auth those pages push
+  // to `sanitizeNextPath(next)`. This locks the contract end-to-end so a signed
+  // co-planner lands back on the exact invite they followed.
+  const BASE = "https://plan.example.com";
+
+  /** Derive the join path the auth pages carry as `next`, exactly as the page does. */
+  function joinPathFor(token: string): string {
+    return `/r/${encodeURIComponent(token)}/join`;
+  }
+
+  it("a fresh invite's join path is a valid same-origin `next`", async () => {
+    const token = await signChurchInvite(inviteOpts(), SECRET);
+    const link = buildInviteLink(BASE, token);
+    const path = link.slice(BASE.length); // strip origin → the route path
+    expect(path).toBe(joinPathFor(token));
+    // The auth pages run this exact sanitiser before redirecting; an attacker
+    // can't smuggle an off-origin target, but a real join path survives intact.
+    expect(schemas.sanitizeNextPath(path)).toBe(path);
+  });
+
+  it("survives the encode→decode round-trip the href + router perform", async () => {
+    const token = await signChurchInvite(inviteOpts({ jti: "bounce" }), SECRET);
+    const path = joinPathFor(token);
+    // sign-in/up render href as `?next=${encodeURIComponent(path)}`; the browser
+    // hands back the decoded value to useSearchParams().get("next").
+    const decoded = decodeURIComponent(encodeURIComponent(path));
+    const landed = schemas.sanitizeNextPath(decoded);
+    expect(landed).toBe(path);
+    // …and the token in that path still verifies as the same invite.
+    const tokenBack = decodeURIComponent(landed.split("/")[2]);
+    const res = await verifyChurchInvite(tokenBack, SECRET, 1_700_000_000);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.claims.jti).toBe("bounce");
+  });
+
+  it("refuses an off-origin `next` so the invite path can't be hijacked", () => {
+    expect(schemas.sanitizeNextPath("//evil.test/r/x/join")).toBe("/");
+    expect(schemas.sanitizeNextPath("https://evil.test")).toBe("/");
   });
 });
 

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { parseCredentialInput } from "@sundayplan/sdk";
 import { schemas, type MemberStatus } from "@sundayplan/shared";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/data/church";
@@ -82,4 +83,54 @@ export async function setMemberStatus(id: string, status: MemberStatus): Promise
   await supabase.from("member").update(patch).eq("id", id);
   revalidatePath("/people");
   revalidatePath(`/people/${id}`);
+}
+
+// ── Member credentials (background-check / certification gating) ──────────────
+
+export type CredentialState = { error: string | null };
+
+/**
+ * Add or update one credential for a member. There's a unique (member_id, kind)
+ * row, so we upsert on that key — re-saving the same kind edits in place. The
+ * church_id is resolved server-side (never trusted from the form), and the
+ * RLS policy (member_credential_planner_all) double-checks it on write.
+ */
+export async function saveMemberCredential(
+  memberId: string,
+  _prev: CredentialState,
+  formData: FormData,
+): Promise<CredentialState> {
+  const parsed = parseCredentialInput({
+    kind: formData.get("kind"),
+    status: formData.get("status"),
+    issued_at: formData.get("issued_at"),
+    expires_at: formData.get("expires_at"),
+    notes: formData.get("notes"),
+  });
+  if (!parsed.ok) return { error: parsed.error };
+
+  const churchId = await getCurrentChurchId();
+  if (!churchId) return { error: "No church found for your account." };
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("member_credential").upsert(
+    { member_id: memberId, church_id: churchId, ...parsed.value },
+    { onConflict: "member_id,kind" },
+  );
+  if (error) return { error: error.message };
+
+  revalidatePath(`/people/${memberId}`);
+  revalidatePath("/schedule");
+  return { error: null };
+}
+
+/** Remove a credential record. RLS scopes the delete to the planner's church. */
+export async function deleteMemberCredential(
+  memberId: string,
+  credentialId: string,
+): Promise<void> {
+  const supabase = await createClient();
+  await supabase.from("member_credential").delete().eq("id", credentialId);
+  revalidatePath(`/people/${memberId}`);
+  revalidatePath("/schedule");
 }

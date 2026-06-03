@@ -13,6 +13,7 @@ import {
 import type { TeamRoleGroup } from "@/lib/data/teams";
 import type { MemberOption } from "@/lib/data/people";
 import { SkillBadge } from "@/components/people-ui";
+import { RoleRequiredCredentials } from "@/components/role-required-credentials";
 import { Card, CardHeader } from "@/components/ui";
 import { useT } from "@/lib/i18n/client";
 
@@ -141,6 +142,7 @@ function RoleBlock({
         )}
       </div>
       <AddMemberRow teamId={teamId} role={role} memberOptions={memberOptions} />
+      <RoleRequiredCredentials teamId={teamId} role={role} />
     </li>
   );
 }

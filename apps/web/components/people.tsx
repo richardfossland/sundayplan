@@ -1,25 +1,7 @@
 import Link from "next/link";
 import type { PersonRow } from "@/lib/data/people";
-import { Badge } from "@/components/ui";
 import { getT, getLocale } from "@/lib/i18n/server";
-import { formatCalendarShort } from "@/lib/i18n/date";
-
-/** Short calendar date, e.g. "5. jan." (no) or "5 Jan" (en). Locale defaults to "no". */
-export function shortDate(iso: string | null, locale = "no"): string {
-  if (!iso) return "—";
-  return formatCalendarShort(iso, locale);
-}
-
-const SKILL_TONE = { trainer: "gold", lead: "gold", capable: "info", training: "neutral" } as const;
-const STATUS_TONE = { active: "success", inactive: "warning", archived: "neutral" } as const;
-
-export function SkillBadge({ skill }: { skill: PersonRow["skill"] }) {
-  return <Badge tone={SKILL_TONE[skill]}>{skill}</Badge>;
-}
-
-export function StatusBadge({ status }: { status: PersonRow["status"] }) {
-  return <Badge tone={STATUS_TONE[status]}>{status}</Badge>;
-}
+import { SkillBadge, StatusBadge, shortDate } from "@/components/people-ui";
 
 export async function PeopleTable({ people }: { people: PersonRow[] }) {
   const [t, locale] = await Promise.all([getT(), getLocale()]);

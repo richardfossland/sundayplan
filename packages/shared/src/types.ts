@@ -294,7 +294,8 @@ export type MagicLinkPurpose =
   | "assignment_response"
   | "availability_set"
   | "swap_request"
-  | "generic";
+  | "generic"
+  | "church_invite";
 
 export interface MagicLinkClaims {
   /** member id — scopes RLS reads */
@@ -303,6 +304,26 @@ export interface MagicLinkClaims {
   church_id: string;
   purpose: MagicLinkPurpose;
   assignment_id?: string;
+  /** unix seconds */
+  exp: number;
+  /** unix seconds */
+  iat: number;
+  /** prevent reuse */
+  jti: string;
+}
+
+/** The church_member roles grantable through an invite link. */
+export type ChurchInviteRole = "admin" | "planner" | "team_lead";
+
+/**
+ * Claims for a church-invite token (Phase 1.3). Unlike {@link MagicLinkClaims}
+ * these carry no `member_id` — the invitee has no `member` row; they become a
+ * planner-side `church_member` with `role`. `purpose` is always `church_invite`.
+ */
+export interface ChurchInviteClaims {
+  church_id: string;
+  role: ChurchInviteRole;
+  purpose: "church_invite";
   /** unix seconds */
   exp: number;
   /** unix seconds */

@@ -7,9 +7,11 @@ const AUTH_PREFIXES = ["/sign-in", "/sign-up"];
  * Public routes reachable WITHOUT a planner account. The magic-link volunteer
  * response page (`/r/<token>`) is the no-account RSVP surface (Phase 7): the
  * signed token IS the auth, so the planner-session gate must not redirect it to
- * sign-in. Keep this list tight.
+ * sign-in. `/auth/callback` is the OAuth landing (Phase 1.3): the session cookie
+ * isn't set until that handler exchanges the code, so it must pass through
+ * un-gated. Keep this list tight.
  */
-const PUBLIC_PREFIXES = ["/r/"];
+const PUBLIC_PREFIXES = ["/r/", "/auth/callback"];
 
 /** Refresh the session cookie and gate app routes behind auth. */
 export async function updateSession(request: NextRequest) {

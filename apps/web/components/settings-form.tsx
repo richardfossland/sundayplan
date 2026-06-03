@@ -2,12 +2,14 @@
 
 import { useActionState, useState } from "react";
 import {
+  createChurchInvite,
   updateChurchProfile,
   updateChurchSettings,
+  type InviteFormState,
   type SettingsFormState,
 } from "@/app/(app)/settings/actions";
 import type { ChurchProfile } from "@/lib/data/settings";
-import type { ChurchSettings } from "@sundayplan/shared";
+import { schemas, type ChurchSettings } from "@sundayplan/shared";
 import { Card, CardHeader } from "@/components/ui";
 import { TabBar } from "@/components/tabs";
 import { useT, type TFn } from "@/lib/i18n/client";
@@ -285,6 +287,82 @@ export function VolunteerRulesForm({ settings }: { settings: ChurchSettings }) {
           <Save pending={pending} label={t("settings.rules.save")} t={t} />
           <Note state={state} t={t} />
         </div>
+      </form>
+    </Card>
+  );
+}
+
+const inviteInitial: InviteFormState = { error: null, link: null, role: null };
+
+/**
+ * Mint a single-use church-invite link a planner copy-pastes to a co-planner.
+ * Each submit issues a fresh link (single-use), shows it with a Copy button, and
+ * never stores the raw link client-side beyond the current result.
+ */
+export function ChurchInviteForm() {
+  const t = useT();
+  const [state, action, pending] = useActionState(createChurchInvite, inviteInitial);
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    if (!state.link) return;
+    try {
+      await navigator.clipboard.writeText(state.link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard blocked (insecure context / permissions) — the link is still
+      // visible in the field for a manual copy.
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader title={t("settings.invite.title")} sub={t("settings.invite.sub")} />
+      <form action={action} className="space-y-4 px-5 py-5">
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div>
+            <label className={label}>{t("settings.invite.role")}</label>
+            <select name="role" defaultValue="planner" className={input}>
+              {schemas.ChurchInviteRole.options.map((r) => (
+                <option key={r} value={r}>
+                  {schemas.CHURCH_INVITE_ROLE_LABELS[r]}
+                </option>
+              ))}
+            </select>
+            <p className={hint}>{t("settings.invite.roleHint")}</p>
+          </div>
+          <button
+            type="submit"
+            disabled={pending}
+            className="rounded-lg bg-gold-400 px-4 py-2 text-sm font-semibold text-ink-950 transition-opacity hover:opacity-90 disabled:opacity-50"
+          >
+            {pending ? t("common.saving") : t("settings.invite.create")}
+          </button>
+        </div>
+        {state.error ? (
+          <p className="text-xs text-[color:var(--color-danger)]">{state.error}</p>
+        ) : null}
+        {state.link ? (
+          <div className="space-y-2 rounded-lg border border-white/10 bg-ink-950/40 p-3">
+            <p className="text-xs text-ink-400">
+              {t("settings.invite.ready", {
+                role: state.role ? schemas.CHURCH_INVITE_ROLE_LABELS[state.role] : "",
+              })}
+            </p>
+            <div className="flex items-center gap-2">
+              <input readOnly value={state.link} className={`${input} font-mono text-xs`} />
+              <button
+                type="button"
+                onClick={copy}
+                className="shrink-0 rounded-lg border border-white/10 px-3 py-2 text-sm text-ink-200 transition-colors hover:border-white/25"
+              >
+                {copied ? t("settings.invite.copied") : t("settings.invite.copy")}
+              </button>
+            </div>
+            <p className={hint}>{t("settings.invite.expiryHint")}</p>
+          </div>
+        ) : null}
       </form>
     </Card>
   );

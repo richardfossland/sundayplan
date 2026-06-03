@@ -6,6 +6,7 @@
  * the coverage gap the insights flag.
  */
 import { createClient } from "@/lib/supabase/server";
+import { parseRequiredCredentials, type CredentialKind } from "@sundayplan/sdk";
 import type { SkillLevel } from "@sundayplan/shared";
 
 export interface TeamInfo {
@@ -24,6 +25,8 @@ export interface TeamRoleGroup {
   id: string;
   role: string;
   skill_required: SkillLevel;
+  /** Credential kinds this role demands; auto-fill skips members who lack one. */
+  required_credentials: CredentialKind[];
   members: Array<{ id: string; name: string; skill: SkillLevel; is_key_person: boolean }>;
 }
 
@@ -70,6 +73,7 @@ interface RoleEmbed {
   id: string;
   name: string;
   skill_required: SkillLevel;
+  required_credentials: string[] | null;
   team_membership:
     | {
         skill_level: SkillLevel;
@@ -85,7 +89,7 @@ export async function getTeamRoles(id: string): Promise<TeamRoleGroup[]> {
   const { data, error } = await supabase
     .from("role")
     .select(
-      "id, name, skill_required, team_membership(skill_level, is_key_person, member(id, display_name))",
+      "id, name, skill_required, required_credentials, team_membership(skill_level, is_key_person, member(id, display_name))",
     )
     .eq("team_id", id)
     .order("name");
@@ -94,6 +98,8 @@ export async function getTeamRoles(id: string): Promise<TeamRoleGroup[]> {
     id: r.id,
     role: r.name,
     skill_required: r.skill_required,
+    // Normalise through the SDK parser so a stray DB value can't reach the UI.
+    required_credentials: parseRequiredCredentials(r.required_credentials ?? []),
     members: (r.team_membership ?? [])
       .filter((tm) => tm.member)
       .map((tm) => ({
@@ -103,6 +109,18 @@ export async function getTeamRoles(id: string): Promise<TeamRoleGroup[]> {
         is_key_person: tm.is_key_person ?? false,
       })),
   }));
+}
+
+/** Just the required-credential kinds for one role (RLS-scoped). */
+export async function getRoleRequiredCredentials(roleId: string): Promise<CredentialKind[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("role")
+    .select("required_credentials")
+    .eq("id", roleId)
+    .maybeSingle();
+  if (error) throw error;
+  return parseRequiredCredentials((data?.required_credentials as string[] | null) ?? []);
 }
 
 const HAS_LEAD: SkillLevel[] = ["lead", "trainer"];

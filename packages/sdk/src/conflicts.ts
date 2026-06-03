@@ -21,10 +21,17 @@
  *   7 unfilled_near_deadline (soft)  — required slot still open near the date
  *   8 consecutive_sundays    (soft)  — too many Sundays in a row
  *   9 key_person_unavailable (soft)  — every lead for a required role is away
+ *  10 credential_gap         (hard)  — member lacks a credential the role requires
  *
  * Rule 5 keys off an opaque `household_id` grouping label on the member; rule 9
  * off a `keyPersons` list (member is a designated lead for a role) — both
  * supplied by the data layer. A rule simply no-ops when its inputs are absent.
+ *
+ * Rule 10 keys off `member.credentials` (the certifications a member holds) and
+ * `roleRequiredCredentials` (the set each role demands). It is the *enforcement*
+ * counterpart to the auto-fill credential gate (which merely keeps an
+ * uncredentialed member out of the candidate pool): when a planner places one
+ * by hand, this surfaces the gap as a hard conflict. Both no-op when absent.
  *
  * Rule 1's "overlapping time slots" nuance is approximated as "same service":
  * absolute item start times aren't modeled yet, so we flag any same-service
@@ -33,6 +40,7 @@
 
 import type { Availability, SkillLevel } from "@sundayplan/shared";
 import { isUnavailable, isoDate, utcWeekday } from "@sundayplan/shared";
+import { missingCredentials, type CredentialKind, type MemberCredential } from "./credentials";
 
 export type ConflictSeverity = "hard" | "soft";
 
@@ -45,7 +53,8 @@ export type ConflictRule =
   | "skill_gap"
   | "unfilled_near_deadline"
   | "consecutive_sundays"
-  | "key_person_unavailable";
+  | "key_person_unavailable"
+  | "credential_gap";
 
 export interface Conflict {
   rule: ConflictRule;
@@ -80,6 +89,8 @@ export interface MemberInfo {
   max_assignments_per_month: number;
   /** opaque household grouping label; members sharing it trip rule 5 */
   household_id?: string | null;
+  /** certifications the member holds — drives rule 10 (credential_gap) */
+  credentials?: MemberCredential[];
 }
 
 /** A role requirement for a service — drives unfilled-slot detection. */
@@ -114,6 +125,8 @@ export interface ConflictContext {
   requirements?: RoleRequirement[];
   /** designated leads per role — supplied for rule 9 (key_person_unavailable) */
   keyPersons?: KeyPerson[];
+  /** credentials each role demands, by role id — supplied for rule 10 */
+  roleRequiredCredentials?: Record<string, CredentialKind[]>;
   config?: Partial<ConflictConfig>;
   /** "today", for deadline-based rules. Defaults to `new Date()`. */
   now?: Date;
@@ -145,6 +158,7 @@ export function detectConflicts(ctx: ConflictContext): Conflict[] {
     ...ruleUnfilledNearDeadline(ctx, serviceById, now, cfg),
     ...ruleConsecutiveSundays(ctx, serviceById, cfg),
     ...ruleKeyPersonUnavailable(ctx, serviceById, memberById),
+    ...ruleCredentialGap(ctx, memberById, now),
   ];
 }
 
@@ -433,6 +447,33 @@ function ruleKeyPersonUnavailable(
         message: `All ${keys.length} designated lead(s) for this role are unavailable on ${isoDate(service.starts_at)}`,
       });
     }
+  }
+  return out;
+}
+
+// ── Rule 10: member lacks a credential the role requires (hard) ─────────────
+function ruleCredentialGap(
+  ctx: ConflictContext,
+  memberById: Map<string, MemberInfo>,
+  now: Date,
+): Conflict[] {
+  const required = ctx.roleRequiredCredentials;
+  if (!required) return [];
+  const out: Conflict[] = [];
+  for (const a of ctx.assignments) {
+    const need = required[a.role_id];
+    if (!need || need.length === 0) continue;
+    const held = memberById.get(a.member_id)?.credentials ?? [];
+    const missing = missingCredentials(need, held, now);
+    if (missing.length === 0) continue;
+    out.push({
+      rule: "credential_gap",
+      severity: "hard",
+      member_id: a.member_id,
+      service_id: a.service_id,
+      role_id: a.role_id,
+      message: `Missing required credential(s): ${missing.join(", ")}`,
+    });
   }
   return out;
 }

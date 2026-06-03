@@ -12,6 +12,19 @@ import {
   ServiceInputSchema,
   ServiceItemInputSchema,
   SongInputSchema,
+  ChurchInviteRole,
+  ChurchInviteIssueSchema,
+  parseChurchInviteRole,
+  CHURCH_INVITE_ROLE_LABELS,
+  OAuthProvider,
+  OAUTH_PROVIDERS,
+  OAUTH_PROVIDER_LABELS,
+  OAUTH_CALLBACK_PATH,
+  parseOAuthProvider,
+  buildOAuthRedirectTo,
+  sanitizeNextPath,
+  oauthErrorMessage,
+  isEmailVerifiedIdentity,
   isoDate,
   isoDateTime,
   localeCode,
@@ -185,5 +198,176 @@ describe("DeliveryInputSchema", () => {
     });
     expect(d.status).toBe("skipped");
     expect(d.skip_reason).toBe("no usable channel");
+  });
+});
+
+// ── OAuth sign-up (Phase 1.3) ──────────────────────────────────────────────────
+
+describe("OAuthProvider", () => {
+  it("accepts the three supported providers", () => {
+    expect(OAuthProvider.safeParse("github").success).toBe(true);
+    expect(OAuthProvider.safeParse("google").success).toBe(true);
+    expect(OAuthProvider.safeParse("apple").success).toBe(true);
+  });
+
+  it("rejects unsupported providers", () => {
+    expect(OAuthProvider.safeParse("facebook").success).toBe(false);
+    expect(OAuthProvider.safeParse("").success).toBe(false);
+  });
+
+  it("the canonical list and labels stay in lock-step with the enum", () => {
+    expect([...OAUTH_PROVIDERS]).toEqual(["github", "google", "apple"]);
+    expect(Object.keys(OAUTH_PROVIDER_LABELS).sort()).toEqual([...OAUTH_PROVIDERS].sort());
+    for (const p of OAUTH_PROVIDERS) {
+      expect(OAuthProvider.safeParse(p).success).toBe(true);
+    }
+  });
+});
+
+describe("parseOAuthProvider", () => {
+  it("returns the canonical provider for valid input", () => {
+    expect(parseOAuthProvider("github")).toBe("github");
+    expect(parseOAuthProvider("google")).toBe("google");
+  });
+
+  it("returns null for unknown / missing values", () => {
+    expect(parseOAuthProvider(null)).toBeNull();
+    expect(parseOAuthProvider(undefined)).toBeNull();
+    expect(parseOAuthProvider("GITHUB")).toBeNull();
+    expect(parseOAuthProvider("twitter")).toBeNull();
+  });
+});
+
+describe("sanitizeNextPath", () => {
+  it("passes through same-origin absolute paths", () => {
+    expect(sanitizeNextPath("/")).toBe("/");
+    expect(sanitizeNextPath("/onboarding")).toBe("/onboarding");
+    expect(sanitizeNextPath("/services?x=1")).toBe("/services?x=1");
+  });
+
+  it("collapses open-redirect attempts to /", () => {
+    expect(sanitizeNextPath("//evil.com")).toBe("/");
+    expect(sanitizeNextPath("/\\evil.com")).toBe("/");
+    expect(sanitizeNextPath("https://evil.com")).toBe("/");
+    expect(sanitizeNextPath("evil.com")).toBe("/");
+    expect(sanitizeNextPath("")).toBe("/");
+    expect(sanitizeNextPath(null)).toBe("/");
+    expect(sanitizeNextPath(undefined)).toBe("/");
+  });
+});
+
+describe("buildOAuthRedirectTo", () => {
+  it("targets the callback route and carries an encoded next param", () => {
+    expect(buildOAuthRedirectTo("https://plan.example.com")).toBe(
+      "https://plan.example.com/auth/callback?next=%2F",
+    );
+    expect(buildOAuthRedirectTo("https://plan.example.com", "/onboarding")).toBe(
+      "https://plan.example.com/auth/callback?next=%2Fonboarding",
+    );
+  });
+
+  it("trims trailing slashes from the origin and uses the shared callback path", () => {
+    const url = buildOAuthRedirectTo("https://plan.example.com///", "/services");
+    expect(url).toContain(`https://plan.example.com${OAUTH_CALLBACK_PATH}`);
+    expect(url).not.toContain("com//auth");
+  });
+
+  it("refuses to embed an open-redirect via next", () => {
+    expect(buildOAuthRedirectTo("https://x.test", "//evil.com")).toBe(
+      "https://x.test/auth/callback?next=%2F",
+    );
+  });
+});
+
+describe("oauthErrorMessage", () => {
+  it("returns null when there is no error code", () => {
+    expect(oauthErrorMessage(null)).toBeNull();
+    expect(oauthErrorMessage(undefined)).toBeNull();
+    expect(oauthErrorMessage("")).toBeNull();
+  });
+
+  it("maps known codes to friendly copy", () => {
+    expect(oauthErrorMessage("access_denied")).toMatch(/cancelled/i);
+    expect(oauthErrorMessage("provider_email_needs_verification")).toMatch(/verif/i);
+    expect(oauthErrorMessage("server_error")).toMatch(/unavailable/i);
+  });
+
+  it("falls back to a generic message for unknown codes", () => {
+    expect(oauthErrorMessage("weird_code")).toMatch(/couldn't complete/i);
+  });
+});
+
+// ── Church invites (Phase 1.3) ──────────────────────────────────────────────────
+
+describe("ChurchInviteRole", () => {
+  it("accepts only the invitable planner-side roles", () => {
+    expect(ChurchInviteRole.safeParse("admin").success).toBe(true);
+    expect(ChurchInviteRole.safeParse("planner").success).toBe(true);
+    expect(ChurchInviteRole.safeParse("team_lead").success).toBe(true);
+  });
+
+  it("rejects viewer (added directly, not via invite) and unknowns", () => {
+    expect(ChurchInviteRole.safeParse("viewer").success).toBe(false);
+    expect(ChurchInviteRole.safeParse("owner").success).toBe(false);
+    expect(ChurchInviteRole.safeParse("").success).toBe(false);
+  });
+
+  it("labels stay in lock-step with the enum", () => {
+    for (const role of ["admin", "planner", "team_lead"] as const) {
+      expect(ChurchInviteRole.safeParse(role).success).toBe(true);
+      expect(CHURCH_INVITE_ROLE_LABELS[role]).toBeTruthy();
+    }
+    expect(Object.keys(CHURCH_INVITE_ROLE_LABELS).sort()).toEqual(
+      ["admin", "planner", "team_lead"],
+    );
+  });
+});
+
+describe("parseChurchInviteRole", () => {
+  it("returns the canonical role for valid input", () => {
+    expect(parseChurchInviteRole("admin")).toBe("admin");
+    expect(parseChurchInviteRole("team_lead")).toBe("team_lead");
+  });
+
+  it("returns null for unknown / missing / non-invitable values", () => {
+    expect(parseChurchInviteRole("viewer")).toBeNull();
+    expect(parseChurchInviteRole(null)).toBeNull();
+    expect(parseChurchInviteRole(undefined)).toBeNull();
+    expect(parseChurchInviteRole("ADMIN")).toBeNull();
+  });
+});
+
+describe("ChurchInviteIssueSchema", () => {
+  it("defaults role to planner and TTL to 14 days", () => {
+    const m = ChurchInviteIssueSchema.parse({ church_id: UUID });
+    expect(m.role).toBe("planner");
+    expect(m.ttl_seconds).toBe(60 * 60 * 24 * 14);
+  });
+
+  it("requires a uuid church_id and bounds the TTL", () => {
+    expect(ChurchInviteIssueSchema.safeParse({ church_id: "not-a-uuid" }).success).toBe(false);
+    expect(ChurchInviteIssueSchema.safeParse({ church_id: UUID, ttl_seconds: 10 }).success).toBe(false);
+    expect(
+      ChurchInviteIssueSchema.safeParse({ church_id: UUID, ttl_seconds: 60 * 60 * 24 * 60 }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a non-invitable role", () => {
+    expect(ChurchInviteIssueSchema.safeParse({ church_id: UUID, role: "viewer" }).success).toBe(false);
+  });
+});
+
+describe("isEmailVerifiedIdentity", () => {
+  it("is true only when an email is present and verified", () => {
+    expect(isEmailVerifiedIdentity({ email: "a@b.com", email_verified: true })).toBe(true);
+  });
+
+  it("rejects unverified, missing, or absent emails", () => {
+    expect(isEmailVerifiedIdentity({ email: "a@b.com", email_verified: false })).toBe(false);
+    expect(isEmailVerifiedIdentity({ email: "a@b.com", email_verified: null })).toBe(false);
+    expect(isEmailVerifiedIdentity({ email: null, email_verified: true })).toBe(false);
+    expect(isEmailVerifiedIdentity({ email_verified: true })).toBe(false);
+    expect(isEmailVerifiedIdentity(null)).toBe(false);
+    expect(isEmailVerifiedIdentity(undefined)).toBe(false);
   });
 });

@@ -1,16 +1,34 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { schemas } from "@sundayplan/shared";
 import { createClient } from "@/lib/supabase/client";
 
+// `useSearchParams` (we read `?next=` so an invite link bounces the planner back
+// to `/r/<token>/join` after they sign in) forces a client-side bailout, so the
+// form lives behind a Suspense boundary — same shape as the sign-up page.
 export default function SignInPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignInForm />
+    </Suspense>
+  );
+}
+
+function SignInForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Where to land after auth: a sanitised same-origin path (the invite path, the
+  // OAuth `next`, …) or `/` so the `(app)` layout decides onboarding vs dashboard.
+  const next = schemas.sanitizeNextPath(searchParams.get("next"));
+  const signUpHref = next === "/" ? "/sign-up" : `/sign-up?next=${encodeURIComponent(next)}`;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,7 +40,7 @@ export default function SignInPage() {
       setLoading(false);
       return;
     }
-    router.push("/");
+    router.push(next);
     router.refresh();
   }
 
@@ -58,7 +76,7 @@ export default function SignInPage() {
       </form>
       <p className="mt-4 text-center text-xs text-ink-500">
         No account?{" "}
-        <Link href="/sign-up" className="text-gold-300 hover:underline">
+        <Link href={signUpHref} className="text-gold-300 hover:underline">
           Create one
         </Link>
       </p>

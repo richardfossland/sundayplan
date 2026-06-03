@@ -223,7 +223,7 @@ export const AssignmentResponseSchema = z.object({
 // ── Magic-link issuance ─────────────────────────────────────────────────────
 
 export const MagicLinkPurpose = z.enum([
-  "assignment_response", "availability_set", "swap_request", "generic",
+  "assignment_response", "availability_set", "swap_request", "generic", "church_invite",
 ]);
 
 export const MagicLinkIssueSchema = z.object({
@@ -232,6 +232,46 @@ export const MagicLinkIssueSchema = z.object({
   assignment_id: uuid.optional().nullable(),
   /** Time-to-live in seconds — defaults to 7 days */
   ttl_seconds: z.number().int().min(60).max(60 * 60 * 24 * 30).default(60 * 60 * 24 * 7),
+});
+
+// ── Church invites (Phase 1.3) ──────────────────────────────────────────────────
+// A planner onboards co-planners by minting a signed invite link tied to a church
+// + a role, then copy-pastes it (no email/SMS provider needed). The recipient
+// signs in / signs up, lands on the accept page, and a `church_member` row is
+// created with the invited role. Unlike volunteer magic-links these are NOT
+// member-scoped — the invitee has no `member` row, they become a planner-side
+// `church_member`. The roles below are exactly the planner-side roles that can be
+// granted via an invite (`viewer` isn't invitable — viewers are added directly).
+
+/** The church_member roles a planner may grant through an invite link. */
+export const ChurchInviteRole = z.enum(["admin", "planner", "team_lead"]);
+export type ChurchInviteRoleName = z.infer<typeof ChurchInviteRole>;
+
+/** Validate a `role` value from a form/query; returns the role or `null`. */
+export function parseChurchInviteRole(
+  raw: string | null | undefined,
+): ChurchInviteRoleName | null {
+  const r = ChurchInviteRole.safeParse(raw);
+  return r.success ? r.data : null;
+}
+
+/** Human-facing label for each invitable role. */
+export const CHURCH_INVITE_ROLE_LABELS: Record<ChurchInviteRoleName, string> = {
+  admin: "Admin",
+  planner: "Planner",
+  team_lead: "Team lead",
+};
+
+export const ChurchInviteIssueSchema = z.object({
+  church_id: uuid,
+  role: ChurchInviteRole.default("planner"),
+  /** Time-to-live in seconds — defaults to 14 days (an onboarding window). */
+  ttl_seconds: z
+    .number()
+    .int()
+    .min(60)
+    .max(60 * 60 * 24 * 30)
+    .default(60 * 60 * 24 * 14),
 });
 
 // ── Communications (Phase 6) ──────────────────────────────────────────────────
@@ -318,6 +358,107 @@ export const DeliveryInputSchema = z.object({
   provider_message_id: z.string().max(200).optional().nullable(),
   cost_cents: z.number().int().min(0).optional().nullable(),
 });
+
+// ── OAuth sign-up (Phase 1.3) ──────────────────────────────────────────────────
+// Planner onboarding via Supabase's built-in OAuth providers. The pure, network-
+// free pieces live here so the client sign-up page AND the server callback route
+// share one validated set of providers + the same redirect/error logic, and so
+// it's all unit-testable without a Supabase instance. No secrets touch this
+// module — provider credentials are configured in Supabase, not in code.
+
+/**
+ * The OAuth providers we expose on the sign-up screen. Supabase supports these
+ * out of the box; local dev stubs them so the flow is testable without keys.
+ * Keep this list in lock-step with the buttons rendered in the sign-up page.
+ */
+export const OAuthProvider = z.enum(["github", "google", "apple"]);
+export type OAuthProviderName = z.infer<typeof OAuthProvider>;
+
+export const OAUTH_PROVIDERS: readonly OAuthProviderName[] = [
+  "github",
+  "google",
+  "apple",
+] as const;
+
+/** Human-facing label for each provider button. */
+export const OAUTH_PROVIDER_LABELS: Record<OAuthProviderName, string> = {
+  github: "GitHub",
+  google: "Google",
+  apple: "Apple",
+};
+
+/**
+ * Validate a `?provider=X` query param (from a redirect back to sign-up or from
+ * a button click). Returns the canonical provider name or `null` if unknown —
+ * the caller decides whether to ignore it or surface an error.
+ */
+export function parseOAuthProvider(raw: string | null | undefined): OAuthProviderName | null {
+  const r = OAuthProvider.safeParse(raw);
+  return r.success ? r.data : null;
+}
+
+/** Where Supabase sends the browser after the provider authenticates the user. */
+export const OAUTH_CALLBACK_PATH = "/auth/callback";
+
+/**
+ * Build the absolute `redirectTo` URL handed to `signInWithOAuth`. The provider
+ * bounces back to our callback route, which exchanges the code for a session and
+ * then forwards to `next` (defaults to `/`, where the app layout decides between
+ * onboarding and the dashboard). `next` is sanitised to a same-origin path so an
+ * attacker can't smuggle an open-redirect through the query string.
+ */
+export function buildOAuthRedirectTo(origin: string, next = "/"): string {
+  const base = origin.replace(/\/+$/, "");
+  const safeNext = sanitizeNextPath(next);
+  return `${base}${OAUTH_CALLBACK_PATH}?next=${encodeURIComponent(safeNext)}`;
+}
+
+/**
+ * Coerce a post-auth `next` target to a safe, same-origin absolute path. Anything
+ * that isn't a single leading-slash path (protocol-relative `//evil`, absolute
+ * URLs, backslashes) collapses to `/`.
+ */
+export function sanitizeNextPath(next: string | null | undefined): string {
+  if (!next || typeof next !== "string") return "/";
+  if (!next.startsWith("/")) return "/";
+  if (next.startsWith("//") || next.startsWith("/\\")) return "/";
+  return next;
+}
+
+/**
+ * Map a Supabase / provider OAuth error code (carried as `?error=` or
+ * `?error_code=` on the callback) to a short, user-facing message. Unknown codes
+ * fall back to a generic line so we never render raw provider jargon.
+ */
+export function oauthErrorMessage(code: string | null | undefined): string | null {
+  if (!code) return null;
+  switch (code) {
+    case "access_denied":
+      return "Sign-up was cancelled. You can try again or use email and password.";
+    case "provider_email_needs_verification":
+    case "email_not_confirmed":
+      return "Your provider account's email isn't verified yet. Verify it, then try again.";
+    case "server_error":
+    case "temporarily_unavailable":
+      return "The sign-in provider is temporarily unavailable. Please try again shortly.";
+    default:
+      return "We couldn't complete sign-up with that provider. Please try again.";
+  }
+}
+
+/**
+ * A planner account needs a verified email before it can own a church (it's how
+ * we reach them for licensing + billing). OAuth identities carry the provider's
+ * `email_verified` flag; some providers (e.g. GitHub with a private/unverified
+ * email) hand back an unverified address. This guards that mandatory field.
+ */
+export function isEmailVerifiedIdentity(
+  identity: { email?: string | null; email_verified?: boolean | null } | null | undefined,
+): boolean {
+  if (!identity) return false;
+  if (!identity.email) return false;
+  return identity.email_verified === true;
+}
 
 // ── Reports (Phase 11) ────────────────────────────────────────────────────────
 

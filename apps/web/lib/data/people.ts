@@ -6,6 +6,7 @@
  * showcase until those reads are wired too.
  */
 import { createClient } from "@/lib/supabase/server";
+import type { CredentialKind, CredentialStatus } from "@sundayplan/sdk";
 import type {
   AssignmentStatus,
   ContactChannel,
@@ -159,6 +160,31 @@ interface AssignmentEmbed {
   status: AssignmentStatus;
   service: { name: string; starts_at_utc: string } | null;
   role: { name: string } | null;
+}
+
+export interface CredentialRow {
+  id: string;
+  kind: CredentialKind;
+  status: CredentialStatus;
+  issued_at: string | null; // ISO date
+  expires_at: string | null; // ISO date
+  notes: string | null;
+}
+
+/**
+ * A member's credentials (background-check / certifications). RLS
+ * (member_credential_planner_all) scopes the read to the planner's church, so a
+ * planner only ever sees their own members' records.
+ */
+export async function getMemberCredentials(memberId: string): Promise<CredentialRow[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("member_credential")
+    .select("id, kind, status, issued_at, expires_at, notes")
+    .eq("member_id", memberId)
+    .order("kind");
+  if (error) throw error;
+  return (data ?? []) as CredentialRow[];
 }
 
 /** A member's assignments, soonest service first. */

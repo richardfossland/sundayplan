@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Card, CardHeader, SectionTitle } from "@/components/ui";
-import { SkillBadge, StatusBadge, shortDate } from "@/components/people";
+import { SkillBadge, StatusBadge, shortDate } from "@/components/people-ui";
 import { AvailabilityEditor } from "@/components/availability-editor";
-import { getPerson, getPersonSchedule } from "@/lib/data/people";
+import { MemberCredentialEditor } from "@/components/member-credential-editor";
+import { getPerson, getPersonSchedule, getMemberCredentials } from "@/lib/data/people";
 import { getMemberAvailability } from "@/lib/data/availability";
 import { setMemberStatus } from "@/app/(app)/people/actions";
 import { getT, getLocale } from "@/lib/i18n/server";
@@ -22,9 +23,10 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
   const person = await getPerson(id);
   if (!person) notFound();
 
-  const [schedule, availability] = await Promise.all([
+  const [schedule, availability, credentials] = await Promise.all([
     getPersonSchedule(id),
     getMemberAvailability(id, locale),
+    getMemberCredentials(id),
   ]);
 
   return (
@@ -114,6 +116,8 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
       </div>
 
       <AvailabilityEditor memberId={id} rows={availability} />
+
+      <MemberCredentialEditor memberId={id} rows={credentials} locale={locale} />
     </div>
   );
 }

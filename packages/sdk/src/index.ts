@@ -16,6 +16,7 @@ export * from "./templates";
 export * from "./serviceplan";
 export * from "./serviceplan-bundle";
 export * from "./serviceplan-assemble";
+export * from "./serviceplan-fetcher";
 export * from "./channels";
 export * from "./reports";
 export * from "./coverage";

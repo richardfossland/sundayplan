@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { parseRequiredCredentials } from "@sundayplan/sdk";
 import { schemas } from "@sundayplan/shared";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/data/church";
@@ -144,6 +145,24 @@ export async function setKeyPerson(
     .eq("team_id", teamId)
     .eq("role_id", roleId)
     .eq("member_id", memberId);
+  revalidatePath(`/teams/${teamId}`);
+  revalidatePath("/schedule");
+}
+
+/**
+ * Set which credential kinds a role requires. The form posts a checkbox per
+ * kind (name="required_credentials"); we normalise through the SDK parser so
+ * only valid, de-duplicated kinds land in `role.required_credentials`. An empty
+ * set clears gating for the role. RLS (role_planner_all) scopes the update.
+ */
+export async function updateRoleRequiredCredentials(
+  teamId: string,
+  roleId: string,
+  formData: FormData,
+): Promise<void> {
+  const required = parseRequiredCredentials(formData.getAll("required_credentials"));
+  const supabase = await createClient();
+  await supabase.from("role").update({ required_credentials: required }).eq("id", roleId);
   revalidatePath(`/teams/${teamId}`);
   revalidatePath("/schedule");
 }

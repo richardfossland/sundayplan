@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { SectionTitle, StatTile, Card, CardHeader } from "@/components/ui";
-import { ChurchProfileForm, VolunteerRulesForm } from "@/components/settings-form";
+import { ChurchInviteForm, ChurchProfileForm, VolunteerRulesForm } from "@/components/settings-form";
 import { getChurchProfile, getChurchSettings } from "@/lib/data/settings";
 import { getT } from "@/lib/i18n/server";
 
@@ -41,6 +41,7 @@ async function SettingsBody() {
 
       <ChurchProfileForm church={church} />
       <VolunteerRulesForm settings={settings} />
+      <ChurchInviteForm />
 
       <Card>
         <CardHeader title={t("settings.team.title")} sub={t("settings.team.sub")} />

@@ -1,17 +1,56 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { schemas } from "@sundayplan/shared";
 import { createClient } from "@/lib/supabase/client";
 
+// `useSearchParams` (we read `?error=` / `?next=` from the OAuth callback)
+// forces a client-side bailout, so the form lives behind a Suspense boundary.
 export default function SignUpPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignUpForm />
+    </Suspense>
+  );
+}
+
+function SignUpForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState<schemas.OAuthProviderName | null>(null);
+
+  // Where to land after sign-up: a sanitised same-origin path (e.g. the invite
+  // path `/r/<token>/join`, carried by the invite link) or `/` so the `(app)`
+  // layout decides between onboarding and the dashboard.
+  const next = schemas.sanitizeNextPath(searchParams.get("next"));
+  const signInHref = next === "/" ? "/sign-in" : `/sign-in?next=${encodeURIComponent(next)}`;
+
+  // Surface a provider error bounced back from the OAuth callback (`?error=`).
+  useEffect(() => {
+    const msg = schemas.oauthErrorMessage(searchParams.get("error"));
+    if (msg) setError(msg);
+  }, [searchParams]);
+
+  async function onOAuth(provider: schemas.OAuthProviderName) {
+    setError(null);
+    setOauthBusy(provider);
+    const { error } = await createClient().auth.signInWithOAuth({
+      provider,
+      options: { redirectTo: schemas.buildOAuthRedirectTo(window.location.origin, next) },
+    });
+    if (error) {
+      setError(error.message);
+      setOauthBusy(null);
+    }
+    // On success Supabase navigates the browser to the provider; nothing to do.
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -26,7 +65,7 @@ export default function SignUpPage() {
     // Local dev typically auto-confirms; if a confirmation email is required,
     // there's no session yet.
     if (data.session) {
-      router.push("/");
+      router.push(next);
       router.refresh();
     } else {
       setNotice("Check your email to confirm your account, then sign in.");
@@ -66,9 +105,29 @@ export default function SignUpPage() {
           {loading ? "Creating…" : "Create account"}
         </button>
       </form>
+      <div className="my-5 flex items-center gap-3">
+        <span className="h-px flex-1 bg-white/10" />
+        <span className="text-xs text-ink-600">or continue with</span>
+        <span className="h-px flex-1 bg-white/10" />
+      </div>
+      <div className="space-y-2">
+        {schemas.OAUTH_PROVIDERS.map((provider) => (
+          <button
+            key={provider}
+            type="button"
+            onClick={() => onOAuth(provider)}
+            disabled={oauthBusy !== null}
+            className="w-full rounded-lg border border-white/10 bg-ink-950/60 px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-gold-400/40 hover:bg-ink-900/60 disabled:opacity-50"
+          >
+            {oauthBusy === provider
+              ? "Redirecting…"
+              : `Continue with ${schemas.OAUTH_PROVIDER_LABELS[provider]}`}
+          </button>
+        ))}
+      </div>
       <p className="mt-4 text-center text-xs text-ink-500">
         Already have an account?{" "}
-        <Link href="/sign-in" className="text-gold-300 hover:underline">
+        <Link href={signInHref} className="text-gold-300 hover:underline">
           Sign in
         </Link>
       </p>

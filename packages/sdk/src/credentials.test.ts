@@ -3,6 +3,9 @@ import {
   isCredentialCurrent,
   missingCredentials,
   isBlockedByCredentials,
+  parseCredentialInput,
+  parseRequiredCredentials,
+  CREDENTIAL_KINDS,
   type MemberCredential,
 } from "./credentials";
 
@@ -57,5 +60,74 @@ describe("missingCredentials / isBlockedByCredentials", () => {
 
   it("requires nothing → never blocked", () => {
     expect(isBlockedByCredentials([], held, NOW)).toBe(false);
+  });
+});
+
+describe("parseCredentialInput", () => {
+  it("accepts a valid submission and trims notes", () => {
+    const r = parseCredentialInput({
+      kind: "background_check",
+      status: "current",
+      issued_at: "2026-01-01",
+      expires_at: "2027-01-01",
+      notes: "  Politiattest  ",
+    });
+    expect(r).toEqual({
+      ok: true,
+      value: {
+        kind: "background_check",
+        status: "current",
+        issued_at: "2026-01-01",
+        expires_at: "2027-01-01",
+        notes: "Politiattest",
+      },
+    });
+  });
+
+  it("treats blank dates and blank notes as null", () => {
+    const r = parseCredentialInput({ kind: "cpr", status: "none", issued_at: "", expires_at: "", notes: "  " });
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.value.issued_at).toBeNull();
+      expect(r.value.expires_at).toBeNull();
+      expect(r.value.notes).toBeNull();
+    }
+  });
+
+  it("rejects an unknown kind or status", () => {
+    expect(parseCredentialInput({ kind: "passport", status: "current" }).ok).toBe(false);
+    expect(parseCredentialInput({ kind: "cpr", status: "valid" }).ok).toBe(false);
+  });
+
+  it("rejects a malformed date", () => {
+    expect(parseCredentialInput({ kind: "cpr", status: "current", expires_at: "soon" }).ok).toBe(false);
+  });
+
+  it("rejects an expiry before the issue date", () => {
+    const r = parseCredentialInput({
+      kind: "cpr",
+      status: "current",
+      issued_at: "2026-06-01",
+      expires_at: "2026-01-01",
+    });
+    expect(r.ok).toBe(false);
+  });
+});
+
+describe("parseRequiredCredentials", () => {
+  it("keeps only valid kinds, de-duplicated, in canonical order", () => {
+    expect(parseRequiredCredentials(["safeguarding", "cpr", "cpr", "garbage"])).toEqual([
+      "cpr",
+      "safeguarding",
+    ]);
+  });
+
+  it("returns an empty array when nothing valid is submitted", () => {
+    expect(parseRequiredCredentials([])).toEqual([]);
+    expect(parseRequiredCredentials(["nope", 7, null])).toEqual([]);
+  });
+
+  it("preserves every kind when all are submitted", () => {
+    expect(parseRequiredCredentials([...CREDENTIAL_KINDS])).toEqual([...CREDENTIAL_KINDS]);
   });
 });

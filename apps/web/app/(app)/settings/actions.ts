@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { schemas } from "@sundayplan/shared";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/data/church";
+import { mintChurchInvite } from "@/lib/data/invites";
 
 export type SettingsFormState = { error: string | null; ok: boolean };
 
@@ -95,4 +96,34 @@ export async function updateChurchSettings(
   revalidatePath("/settings");
   revalidatePath("/schedule"); // conflict thresholds changed
   return { error: null, ok: true };
+}
+
+export type InviteFormState =
+  | { error: null; link: string | null; role: schemas.ChurchInviteRoleName | null }
+  | { error: string; link: null; role: null };
+
+/**
+ * Mint a single-use church-invite link for the planner's church + a chosen role
+ * and hand the absolute URL back to the form so they can copy-paste it to a
+ * co-planner (no email/SMS provider needed). Membership in the planner's own
+ * church is the authorization — `getCurrentChurchId` is RLS-scoped — and only the
+ * three invitable roles are accepted.
+ */
+export async function createChurchInvite(
+  _prev: InviteFormState,
+  formData: FormData,
+): Promise<InviteFormState> {
+  const role = schemas.parseChurchInviteRole(formData.get("role")?.toString());
+  if (!role) return { error: "Pick a valid role.", link: null, role: null };
+
+  const churchId = await getCurrentChurchId();
+  if (!churchId) return { error: "No church found for your account.", link: null, role: null };
+
+  try {
+    const minted = await mintChurchInvite(churchId, role);
+    return { error: null, link: minted.invite_link, role: minted.role };
+  } catch {
+    // Most likely MAGICLINK_SECRET isn't configured in this environment.
+    return { error: "Invite links aren't available right now.", link: null, role: null };
+  }
 }

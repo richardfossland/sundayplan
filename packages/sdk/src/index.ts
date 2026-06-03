@@ -6,6 +6,7 @@
  */
 
 export * from "./scoring";
+export * from "./rationale-refiner";
 export * from "./conflicts";
 export * from "./autofill";
 export * from "./swap";

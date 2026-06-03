@@ -241,5 +241,123 @@ export function rankCandidates<T extends { score: ScoreBreakdown | null }>(
     .sort((a, b) => (b.score!.total - a.score!.total));
 }
 
+// ── Phase 9: natural-language rationale refinement ────────────────────────────
+//
+// The scoring engine above is deterministic and ships terse, mechanical
+// `explanation` strings ("28 days since last assignment", "skill mismatch").
+// They are correct but read like a debugger. This seam lets an optional LLM
+// rephrase them into warmer, planner-facing copy — WITHOUT touching the
+// numbers, the ranking, or the engine itself. It mirrors the provider-seam
+// discipline of channels.ts / setlist-ai.ts: pure core, optional model on top.
+//
+// Hard guarantees (all unit-tested):
+//   • Offline-first. With no refiner (the default), the breakdown is returned
+//     untouched — the existing strings are the graceful fallback.
+//   • The refiner may ONLY rewrite the human-readable text. `total`, component
+//     `contribution`/`raw`/`weight`/`name` are copied through verbatim, so a
+//     misbehaving (or hallucinating) model can never change a score.
+//   • Cached. Identical breakdowns hit an in-memory cache keyed by a structural
+//     signature, so re-scoring the same slot doesn't re-request.
+
+/** A short label for the kind of copy being refined, to steer tone. */
+export type RationaleKind = "recommendation" | "conflict";
+
+/** The text the refiner is allowed to rewrite for one breakdown. */
+export interface RationaleDraft {
+  kind: RationaleKind;
+  /** The component explanations, in order, that may be polished. */
+  explanations: string[];
+  /** The warning lines that may be polished. */
+  warnings: string[];
+}
+
+/**
+ * The refinement provider seam. An implementation takes the terse draft copy
+ * and returns warmer phrasings of the SAME shape (same array lengths, same
+ * order). Returning anything mis-shaped is treated as a failure and the
+ * original strings are kept — the caller never has to trust the model.
+ *
+ * Sync OR async: the offline default is sync; a real Claude-backed refiner is
+ * async. `refineBreakdown` awaits either.
+ */
+export interface RationaleRefiner {
+  refine(draft: RationaleDraft): RationaleDraft | Promise<RationaleDraft>;
+}
+
+/**
+ * Build a stable cache key from a breakdown's *text* (the only thing the
+ * refiner sees). Numbers are excluded on purpose: two slots with identical
+ * rationale wording share a refinement regardless of their exact scores.
+ */
+export function rationaleCacheKey(kind: RationaleKind, b: ScoreBreakdown): string {
+  const expl = b.components.map((c) => c.explanation).join("");
+  const warn = b.warnings.join("");
+  return `${kind}${expl}${warn}`;
+}
+
+/** Validate that a refiner's output is the right shape to safely apply. */
+function isSafeRefinement(draft: RationaleDraft, out: unknown): out is RationaleDraft {
+  if (!out || typeof out !== "object") return false;
+  const r = out as Partial<RationaleDraft>;
+  return (
+    Array.isArray(r.explanations) &&
+    Array.isArray(r.warnings) &&
+    r.explanations.length === draft.explanations.length &&
+    r.warnings.length === draft.warnings.length &&
+    r.explanations.every((s) => typeof s === "string" && s.trim().length > 0) &&
+    r.warnings.every((s) => typeof s === "string" && s.trim().length > 0)
+  );
+}
+
+/**
+ * Refine a single breakdown's copy through an optional refiner, with caching
+ * and graceful fallback. Returns a NEW breakdown (numbers identical, text
+ * possibly warmer). With `refiner` omitted/undefined the input is returned
+ * essentially unchanged — the offline path.
+ *
+ * @param cache shared `Map` for memoization; pass the same one across calls in
+ *              a scoring pass so repeated breakdowns reuse a single refinement.
+ */
+export async function refineBreakdown(
+  breakdown: ScoreBreakdown,
+  opts: {
+    kind?: RationaleKind;
+    refiner?: RationaleRefiner | null;
+    cache?: Map<string, RationaleDraft>;
+  } = {},
+): Promise<ScoreBreakdown> {
+  const kind = opts.kind ?? "recommendation";
+  const refiner = opts.refiner;
+  if (!refiner) return breakdown; // offline default — keep existing strings.
+
+  const draft: RationaleDraft = {
+    kind,
+    explanations: breakdown.components.map((c) => c.explanation),
+    warnings: [...breakdown.warnings],
+  };
+
+  const key = rationaleCacheKey(kind, breakdown);
+  let refined = opts.cache?.get(key);
+
+  if (!refined) {
+    try {
+      const out = await refiner.refine(draft);
+      refined = isSafeRefinement(draft, out) ? out : draft; // fall back if mis-shaped.
+    } catch {
+      refined = draft; // any failure (network, key, throw) → keep originals.
+    }
+    opts.cache?.set(key, refined);
+  }
+
+  return {
+    total: breakdown.total,
+    warnings: refined.warnings,
+    components: breakdown.components.map((c, i) => ({
+      ...c,
+      explanation: refined!.explanations[i] ?? c.explanation,
+    })),
+  };
+}
+
 /** Re-export for callers that want type-only access. */
 export type { Assignment };

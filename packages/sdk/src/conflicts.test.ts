@@ -598,6 +598,100 @@ describe("rule 9 — key person unavailable (soft)", () => {
   });
 });
 
+describe("rule 10 — credential gap (hard)", () => {
+  // 2026-01-04 (SUN[0]) is "now" for these expiry checks.
+  const NOW = new Date(`${SUN[0]}T00:00:00Z`);
+
+  it("flags a member placed in a role requiring a credential they lack", () => {
+    const ctx: ConflictContext = {
+      now: NOW,
+      services: [svc("s1", SUN[0])],
+      members: [member("m1", { credentials: [] })],
+      assignments: [asg("m1", "s1", "r1")],
+      roleRequiredCredentials: { r1: ["background_check", "cpr"] },
+    };
+    const hits = only("credential_gap", detectConflicts(ctx));
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({ severity: "hard", member_id: "m1", service_id: "s1", role_id: "r1" });
+    expect(hits[0].message).toMatch(/background_check/);
+    expect(hits[0].message).toMatch(/cpr/);
+  });
+
+  it("does not flag when the member holds every required credential, current", () => {
+    const ctx: ConflictContext = {
+      now: NOW,
+      services: [svc("s1", SUN[0])],
+      members: [
+        member("m1", {
+          credentials: [
+            { kind: "background_check", status: "current", expires_at: null },
+            { kind: "cpr", status: "current", expires_at: "2026-12-31" },
+          ],
+        }),
+      ],
+      assignments: [asg("m1", "s1", "r1")],
+      roleRequiredCredentials: { r1: ["background_check", "cpr"] },
+    };
+    expect(only("credential_gap", detectConflicts(ctx))).toHaveLength(0);
+  });
+
+  it("flags a pending or expired credential as still missing", () => {
+    const ctx: ConflictContext = {
+      now: NOW,
+      services: [svc("s1", SUN[0])],
+      members: [
+        member("m1", {
+          credentials: [
+            { kind: "background_check", status: "pending", expires_at: null },
+            // current status but already expired before NOW → not current
+            { kind: "cpr", status: "current", expires_at: "2025-01-01" },
+          ],
+        }),
+      ],
+      assignments: [asg("m1", "s1", "r1")],
+      roleRequiredCredentials: { r1: ["background_check", "cpr"] },
+    };
+    const hits = only("credential_gap", detectConflicts(ctx));
+    expect(hits).toHaveLength(1);
+    expect(hits[0].message).toMatch(/background_check/);
+    expect(hits[0].message).toMatch(/cpr/);
+  });
+
+  it("no-ops when the role requires no credentials", () => {
+    const ctx: ConflictContext = {
+      now: NOW,
+      services: [svc("s1", SUN[0])],
+      members: [member("m1", { credentials: [] })],
+      assignments: [asg("m1", "s1", "r1")],
+      roleRequiredCredentials: { r1: [] },
+    };
+    expect(only("credential_gap", detectConflicts(ctx))).toHaveLength(0);
+  });
+
+  it("no-ops entirely when roleRequiredCredentials is absent (pre-migration)", () => {
+    const ctx: ConflictContext = {
+      now: NOW,
+      services: [svc("s1", SUN[0])],
+      members: [member("m1", { credentials: [] })],
+      assignments: [asg("m1", "s1", "r1")],
+      // roleRequiredCredentials omitted
+    };
+    expect(only("credential_gap", detectConflicts(ctx))).toHaveLength(0);
+  });
+
+  it("surfaces via previewCandidate before the planner commits", () => {
+    const ctx: ConflictContext = {
+      now: NOW,
+      services: [svc("s1", SUN[0])],
+      members: [member("m1", { credentials: [] })],
+      assignments: [],
+      roleRequiredCredentials: { r1: ["safeguarding"] },
+    };
+    const conflicts = previewCandidate(ctx, asg("m1", "s1", "r1"));
+    expect(only("credential_gap", conflicts)).toHaveLength(1);
+  });
+});
+
 describe("clean schedule", () => {
   it("produces no conflicts for a well-formed snapshot", () => {
     const ctx: ConflictContext = {

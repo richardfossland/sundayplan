@@ -12,6 +12,7 @@ const RULE_LABEL: Record<string, string> = {
   consecutive_sundays: "Consecutive Sundays",
   family_conflict: "Family clash",
   key_person_unavailable: "Lead unavailable",
+  credential_gap: "Credential gap",
 };
 
 type TFn = (key: string, vars?: Record<string, string | number>) => string;
@@ -28,6 +29,7 @@ const RULE_ACTION: Record<string, string> = {
   consecutive_sundays: "Rebalance",
   family_conflict: "Review",
   key_person_unavailable: "Review",
+  credential_gap: "Reassign",
 };
 
 // i18n key per action, used when a `t` is supplied (English map above is the fallback).
@@ -41,6 +43,7 @@ const RULE_ACTION_KEY: Record<string, string> = {
   consecutive_sundays: "conflict.action.rebalance",
   family_conflict: "conflict.action.review",
   key_person_unavailable: "conflict.action.review",
+  credential_gap: "conflict.action.reassign",
 };
 
 /** Deep-link to the offending cell: `?focus` drives the highlight, `#` scrolls. */

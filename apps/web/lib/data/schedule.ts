@@ -8,8 +8,11 @@
  */
 import {
   detectConflicts,
+  parseRequiredCredentials,
+  type CredentialKind,
   type Conflict,
   type ConflictContext,
+  type MemberCredential,
   type MemberInfo,
   type PlacedAssignment,
   type RoleRequirement,
@@ -89,6 +92,7 @@ interface RoleRow {
   id: string;
   name: string;
   skill_required: SkillLevel;
+  required_credentials: string[] | null;
 }
 interface AssignmentRow {
   id: string;
@@ -109,6 +113,12 @@ interface MembershipRow {
   skill_level: SkillLevel;
   is_key_person: boolean;
 }
+interface CredentialRow {
+  member_id: string;
+  kind: CredentialKind;
+  status: MemberCredential["status"];
+  expires_at: string | null;
+}
 
 /**
  * The full schedule view: grid + conflicts, for the planner's church.
@@ -120,16 +130,17 @@ interface MembershipRow {
 export async function getSchedule(locale = "no"): Promise<ScheduleData> {
   const supabase = await createClient();
 
-  const [services, roles, assignments, members, memberships, requirements, settings] =
+  const [services, roles, assignments, members, memberships, requirements, credentials, settings] =
     await Promise.all([
       supabase.from("service").select("id, starts_at_utc, template_id").order("starts_at_utc"),
-      supabase.from("role").select("id, name, skill_required").order("name"),
+      supabase.from("role").select("id, name, skill_required, required_credentials").order("name"),
       supabase.from("assignment").select("id, service_id, role_id, member_id, status"),
       supabase.from("member").select(
         "id, display_name, household, availability(id, member_id, kind, pattern, reason, reason_visibility)",
       ),
       supabase.from("team_membership").select("member_id, role_id, skill_level, is_key_person"),
       supabase.from("service_team_requirement").select("template_id, role_id, quantity"),
+      supabase.from("member_credential").select("member_id, kind, status, expires_at"),
       supabase
         .from("church_settings")
         .select("default_max_assignments_per_month, unfilled_warn_days, max_consecutive_sundays")
@@ -139,6 +150,9 @@ export async function getSchedule(locale = "no"): Promise<ScheduleData> {
   for (const r of [services, roles, assignments, members, memberships, requirements]) {
     if (r.error) throw r.error;
   }
+  // The credential table may not exist pre-migration (0011); treat its error as
+  // "no credentials" so the grid still renders rather than throwing.
+  const credentialRows = (credentials.data ?? []) as unknown as CredentialRow[];
 
   const serviceRows = (services.data ?? []) as unknown as ServiceRow[];
   const requirementRows = (requirements.data ?? []) as unknown as RequirementRow[];
@@ -210,13 +224,29 @@ export async function getSchedule(locale = "no"): Promise<ScheduleData> {
     role_skill_required: roleSkillById.get(a.role_id) ?? "capable",
   }));
 
+  // Held credentials per member, for the credential-gap rule.
+  const heldByMember = new Map<string, MemberCredential[]>();
+  for (const c of credentialRows) {
+    const list = heldByMember.get(c.member_id) ?? [];
+    list.push({ kind: c.kind, status: c.status, expires_at: c.expires_at });
+    heldByMember.set(c.member_id, list);
+  }
+
   const memberInfo: MemberInfo[] = memberRows.map((m) => ({
     id: m.id,
     display_name: m.display_name,
     availability: m.availability ?? [],
     max_assignments_per_month: maxPerMonth,
     household_id: m.household,
+    credentials: heldByMember.get(m.id) ?? [],
   }));
+
+  // What each role demands — normalised through the SDK parser so a stale enum
+  // can never reach the rule. Drives credential_gap on manual placements.
+  const roleRequiredCredentials: Record<string, CredentialKind[]> = {};
+  for (const r of roleRows) {
+    roleRequiredCredentials[r.id] = parseRequiredCredentials(r.required_credentials ?? []);
+  }
 
   // Designated leads per role (rule 9) — from team memberships flagged key.
   const keyPersons: KeyPerson[] = membershipRows
@@ -248,6 +278,7 @@ export async function getSchedule(locale = "no"): Promise<ScheduleData> {
     assignments: placed,
     requirements: serviceRequirements,
     keyPersons,
+    roleRequiredCredentials,
     config: conflictConfig,
   };
 

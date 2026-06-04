@@ -22,6 +22,7 @@ const en: Catalog = {
   "nav.dashboard": "Dashboard",
   "nav.services": "Services",
   "nav.schedule": "Schedule",
+  "nav.swaps": "Swaps",
   "nav.songs": "Songs",
   "nav.people": "People",
   "nav.teams": "Teams",
@@ -123,6 +124,27 @@ const en: Catalog = {
   "autofill.busy": "Finding the best fit…",
   "autofill.tooltip": "We'll suggest the best-matched volunteer for each open slot — you stay in control and review the draft before anything is sent.",
   "schedule.guidance": "We've drafted who fits each slot best. Anything flagged below is worth a second look before you invite.",
+
+  // Swap queue — the planner side of the volunteer "find my replacement" flow.
+  // The dashboard only counts these; this page lets the planner work them.
+  "swaps.eyebrow": "Cover needed",
+  "swaps.title": "Open swap requests",
+  "swaps.intro":
+    "Volunteers who handed a slot back. Expand one to see the people who can cover it without creating a new clash.",
+  "swaps.footer": "Rankings come from eligibleReplacements() in @sundayplan/sdk — the same brain volunteers see.",
+  "swaps.empty.title": "No open swaps",
+  "swaps.empty.body": "When a volunteer hands a slot back, it shows up here so you can find cover.",
+  "swaps.badge.open": "Open",
+  "swaps.row.context": "{role} · {service} · {when}",
+  "swaps.row.unknownRole": "Unknown role",
+  "swaps.row.unknownService": "Unknown service",
+  "swaps.viewCandidates": "View candidates",
+  "swaps.hide": "Hide",
+  "swaps.candidatesTitle": "Who can cover",
+  "swaps.loadingCandidates": "Finding cover…",
+  "swaps.candidatesError": "Couldn't load candidates — try again.",
+  "swaps.noCandidates": "No trained volunteer is free for this slot right now.",
+  "swaps.match": "{score} match",
 
   // Common
   "common.church": "Your church",
@@ -764,6 +786,7 @@ const no: Catalog = {
   "nav.dashboard": "Oversikt",
   "nav.services": "Gudstjenester",
   "nav.schedule": "Vaktliste",
+  "nav.swaps": "Bytter",
   "nav.songs": "Sanger",
   "nav.people": "Personer",
   "nav.teams": "Team",
@@ -863,6 +886,26 @@ const no: Catalog = {
   "autofill.busy": "Finner beste match…",
   "autofill.tooltip": "Vi foreslår den best egnede frivillige for hver åpne rolle — du har kontrollen og ser over utkastet før noe sendes.",
   "schedule.guidance": "Vi har laget et utkast over hvem som passer best i hver rolle. Det som er flagget nedenfor er verdt en ekstra titt før du inviterer.",
+
+  // Byttekø — planleggerens side av frivilliges «finn en avløser»-flyt.
+  "swaps.eyebrow": "Trenger dekning",
+  "swaps.title": "Åpne bytteforespørsler",
+  "swaps.intro":
+    "Frivillige som har gitt fra seg en vakt. Utvid en for å se hvem som kan dekke den uten å skape en ny kollisjon.",
+  "swaps.footer": "Rangeringen kommer fra eligibleReplacements() i @sundayplan/sdk — samme hjerne som frivillige ser.",
+  "swaps.empty.title": "Ingen åpne bytter",
+  "swaps.empty.body": "Når en frivillig gir fra seg en vakt, dukker den opp her så du kan finne dekning.",
+  "swaps.badge.open": "Åpen",
+  "swaps.row.context": "{role} · {service} · {when}",
+  "swaps.row.unknownRole": "Ukjent rolle",
+  "swaps.row.unknownService": "Ukjent gudstjeneste",
+  "swaps.viewCandidates": "Vis kandidater",
+  "swaps.hide": "Skjul",
+  "swaps.candidatesTitle": "Hvem kan dekke",
+  "swaps.loadingCandidates": "Finner dekning…",
+  "swaps.candidatesError": "Kunne ikke laste kandidater — prøv igjen.",
+  "swaps.noCandidates": "Ingen opplært frivillig er ledig for denne vakten akkurat nå.",
+  "swaps.match": "{score} treff",
 
   // Common
   "common.church": "Din menighet",

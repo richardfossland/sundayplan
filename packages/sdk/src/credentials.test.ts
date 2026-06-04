@@ -34,6 +34,25 @@ describe("isCredentialCurrent", () => {
       isCredentialCurrent({ kind: "cpr", status: "current", expires_at: "2026-01-01" }, NOW),
     ).toBe(false);
   });
+
+  it("treats a date-only expiry as valid through the end of its expiry day", () => {
+    // expires_at is a date-only string by convention (DB + <input type=date>);
+    // a certification/background-check is valid THROUGH its expiry date, so a
+    // credential that expires today must still be current later that same day.
+    expect(
+      isCredentialCurrent(
+        { kind: "cpr", status: "current", expires_at: "2026-06-04" },
+        new Date("2026-06-04T14:00:00Z"),
+      ),
+    ).toBe(true);
+    // ...and only stops being current once that day has fully passed.
+    expect(
+      isCredentialCurrent(
+        { kind: "cpr", status: "current", expires_at: "2026-06-04" },
+        new Date("2026-06-05T00:00:00Z"),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("missingCredentials / isBlockedByCredentials", () => {

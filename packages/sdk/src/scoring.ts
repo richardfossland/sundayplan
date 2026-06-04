@@ -60,6 +60,41 @@ export interface ScoringInputs {
   weights?: Partial<ScoreWeights>;
 }
 
+const DAY_MS = 86_400_000;
+const WEEK_MS = 7 * DAY_MS;
+// The Unix epoch (1970-01-01) is a Thursday, so raw `floor(t / WEEK)` buckets
+// run Thu→Wed. Shifting +3 days moves the boundary to Monday 00:00 UTC, so
+// buckets run Monday→Sunday — the church-week convention. (Verified: a Sunday
+// ends its week and the next Monday starts a fresh bucket.)
+const MONDAY_SHIFT_MS = 3 * DAY_MS;
+
+/** Monday-anchored UTC week index for an instant. */
+function weekIndex(t: number): number {
+  return Math.floor((t + MONDAY_SHIFT_MS) / WEEK_MS);
+}
+
+/**
+ * The trailing run of consecutive Mon–Sun weeks a member has served, counted
+ * back from the present. Only an *active* streak counts: if the most recent
+ * served week is more than one week before `now`'s week, the member has rested
+ * and the run is 0 — a streak that ended long ago must not register as burnout.
+ * Multiple services within the same week count once.
+ */
+export function consecutiveWeeksServed(servedDates: Date[], now: Date = new Date()): number {
+  if (servedDates.length === 0) return 0;
+  const weeks = [...new Set(servedDates.map((d) => weekIndex(d.getTime())))].sort((a, b) => b - a);
+  const nowWeek = weekIndex(now.getTime());
+  // The streak must reach up to (or into) the current planning week. A member
+  // whose latest service is two+ weeks back is rested → not on a run.
+  if (weeks[0] < nowWeek - 1) return 0;
+  let run = 1;
+  for (let i = 1; i < weeks.length; i++) {
+    if (weeks[i] === weeks[i - 1] - 1) run++;
+    else break;
+  }
+  return run;
+}
+
 export const DEFAULT_WEIGHTS = {
   skill_match:       40,
   rotation_fairness: 25,

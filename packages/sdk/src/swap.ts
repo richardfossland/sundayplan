@@ -72,3 +72,64 @@ export function eligibleReplacements(input: EligibleReplacementsInput): RankedRe
   out.sort((a, b) => b.score - a.score);
   return out;
 }
+
+/**
+ * ── Resolution decision logic ────────────────────────────────────────────────
+ *
+ * The planner-side queue can RESOLVE an open swap by assigning one of the ranked
+ * candidates to the vacated slot, or CANCEL the swap outright. The Supabase write
+ * lives in the server action; the *decision* — "is this swap still actionable?"
+ * and "may this candidate legitimately take the slot?" — is pure and lives here
+ * so it's unit-testable without a DB.
+ *
+ * A swap is only resolvable while it's `open`. Once it's `claimed`, `resolved`,
+ * or `cancelled`, a second planner (or a stale tab) must not be able to act on
+ * it — that's the offline-checkable half of the optimistic-concurrency guard.
+ */
+
+/** The lifecycle states a swap_request row can be in (mirrors the DB check). */
+export type SwapStatus = "open" | "claimed" | "cancelled" | "resolved";
+
+/** Why an attempted assign/cancel can't proceed. */
+export type SwapResolutionError =
+  | "not_open" // the swap is no longer open (already resolved/cancelled/claimed)
+  | "candidate_not_eligible" // the chosen member isn't in the ranked shortlist
+  | "candidate_is_requester"; // can't assign the slot back to the person who left it
+
+export type SwapResolutionDecision =
+  | { ok: true; memberId: string }
+  | { ok: false; error: SwapResolutionError };
+
+export interface AssignCandidateInput {
+  /** Current persisted status of the swap (read just before the write). */
+  status: SwapStatus | string;
+  /** The member the planner picked to cover the slot. */
+  candidateId: string;
+  /** The member who handed the slot back (cannot be reassigned to themselves). */
+  requesterId: string;
+  /** The currently-eligible candidate ids (from `eligibleReplacements`). */
+  eligibleMemberIds: readonly string[];
+}
+
+/** Is this swap still in a state where a planner may act on it? */
+export function isSwapResolvable(status: SwapStatus | string): boolean {
+  return status === "open";
+}
+
+/**
+ * Decide whether `candidateId` may be assigned to the vacated slot. Pure: the
+ * caller supplies the live status and the ranked shortlist; we gate on both.
+ */
+export function decideAssignCandidate(input: AssignCandidateInput): SwapResolutionDecision {
+  if (!isSwapResolvable(input.status)) return { ok: false, error: "not_open" };
+  if (input.candidateId === input.requesterId) return { ok: false, error: "candidate_is_requester" };
+  if (!input.eligibleMemberIds.includes(input.candidateId)) {
+    return { ok: false, error: "candidate_not_eligible" };
+  }
+  return { ok: true, memberId: input.candidateId };
+}
+
+/** Decide whether an open swap may be cancelled. Only open swaps can. */
+export function decideCancelSwap(status: SwapStatus | string): { ok: true } | { ok: false; error: "not_open" } {
+  return isSwapResolvable(status) ? { ok: true } : { ok: false, error: "not_open" };
+}

@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Availability, SkillLevel } from "@sundayplan/shared";
-import { eligibleReplacements, type ReplacementCandidate } from "./swap";
+import {
+  eligibleReplacements,
+  isSwapResolvable,
+  decideAssignCandidate,
+  decideCancelSwap,
+  type ReplacementCandidate,
+} from "./swap";
 import type { ConflictContext, PlacedAssignment } from "./conflicts";
 import type { ScoringInputs } from "./scoring";
 
@@ -104,5 +110,66 @@ describe("eligibleReplacements", () => {
       candidates: [candidate("ava", { availability: [specific("ava", ["2026-01-04"])] })],
     });
     expect(ranked).toEqual([]);
+  });
+});
+
+describe("isSwapResolvable", () => {
+  it("is true only for open swaps", () => {
+    expect(isSwapResolvable("open")).toBe(true);
+    expect(isSwapResolvable("claimed")).toBe(false);
+    expect(isSwapResolvable("resolved")).toBe(false);
+    expect(isSwapResolvable("cancelled")).toBe(false);
+    expect(isSwapResolvable("garbage")).toBe(false);
+  });
+});
+
+describe("decideAssignCandidate", () => {
+  const base = {
+    status: "open" as const,
+    candidateId: "ben",
+    requesterId: "ava",
+    eligibleMemberIds: ["ben", "cara"] as const,
+  };
+
+  it("accepts an eligible candidate on an open swap", () => {
+    expect(decideAssignCandidate(base)).toEqual({ ok: true, memberId: "ben" });
+  });
+
+  it("rejects when the swap is no longer open (concurrency guard)", () => {
+    expect(decideAssignCandidate({ ...base, status: "resolved" })).toEqual({ ok: false, error: "not_open" });
+    expect(decideAssignCandidate({ ...base, status: "cancelled" })).toEqual({ ok: false, error: "not_open" });
+    expect(decideAssignCandidate({ ...base, status: "claimed" })).toEqual({ ok: false, error: "not_open" });
+  });
+
+  it("rejects a candidate who isn't in the ranked shortlist", () => {
+    expect(decideAssignCandidate({ ...base, candidateId: "zoe" })).toEqual({
+      ok: false,
+      error: "candidate_not_eligible",
+    });
+  });
+
+  it("refuses to reassign the slot back to the requester", () => {
+    expect(
+      decideAssignCandidate({ ...base, candidateId: "ava", eligibleMemberIds: ["ava", "ben"] }),
+    ).toEqual({ ok: false, error: "candidate_is_requester" });
+  });
+
+  it("checks status before eligibility (a closed swap is closed regardless of pick)", () => {
+    expect(decideAssignCandidate({ ...base, status: "resolved", candidateId: "zoe" })).toEqual({
+      ok: false,
+      error: "not_open",
+    });
+  });
+});
+
+describe("decideCancelSwap", () => {
+  it("allows cancelling an open swap", () => {
+    expect(decideCancelSwap("open")).toEqual({ ok: true });
+  });
+
+  it("refuses to cancel a swap that's already closed", () => {
+    expect(decideCancelSwap("resolved")).toEqual({ ok: false, error: "not_open" });
+    expect(decideCancelSwap("cancelled")).toEqual({ ok: false, error: "not_open" });
+    expect(decideCancelSwap("claimed")).toEqual({ ok: false, error: "not_open" });
   });
 });

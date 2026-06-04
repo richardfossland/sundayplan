@@ -4,6 +4,8 @@ import {
   buildCcliReport,
   buildVolunteerBalance,
   buildServiceCoverage,
+  buildChurnReport,
+  buildRoleBalanceReport,
   quarterRange,
   rangeLabel,
 } from "@sundayplan/sdk";
@@ -11,11 +13,15 @@ import { Badge, Card, SectionTitle, StatTile } from "@/components/ui";
 import {
   VolunteerBalanceTable,
   ServiceCoverageTable,
+  VolunteerHealthTable,
+  RoleBalanceTable,
 } from "@/components/reports-operational";
 import {
   getSongUsageRows,
   getServeRows,
   getCoverageRows,
+  getChurnInputs,
+  getRoleBalanceInputs,
 } from "@/lib/data/reports";
 import { getChurchSettings } from "@/lib/data/settings";
 import { getT } from "@/lib/i18n/server";
@@ -29,11 +35,14 @@ function dates(list: string[]): string {
   return list.join(", ");
 }
 
-type Tab = "licensing" | "balance" | "coverage";
+type Tab = "licensing" | "balance" | "coverage" | "health" | "roleBalance";
+const TAB_KEYS: Tab[] = ["licensing", "balance", "coverage", "health", "roleBalance"];
 const TABS: { key: Tab; labelKey: string }[] = [
   { key: "licensing", labelKey: "reports.tab.licensing" },
   { key: "balance", labelKey: "reports.tab.balance" },
   { key: "coverage", labelKey: "reports.tab.coverage" },
+  { key: "health", labelKey: "reports.tab.health" },
+  { key: "roleBalance", labelKey: "reports.tab.roleBalance" },
 ];
 
 export default async function ReportsPage({
@@ -46,8 +55,9 @@ export default async function ReportsPage({
   const def = quarterRange(new Date());
   const from = sp.from || def.from;
   const to = sp.to || def.to;
-  const tab: Tab =
-    sp.tab === "balance" || sp.tab === "coverage" ? sp.tab : "licensing";
+  const tab: Tab = (TAB_KEYS as string[]).includes(sp.tab ?? "")
+    ? (sp.tab as Tab)
+    : "licensing";
 
   const tabHref = (t: Tab) => `/reports?tab=${t}&from=${from}&to=${to}`;
 
@@ -101,9 +111,55 @@ export default async function ReportsPage({
         <LicensingTab from={from} to={to} />
       ) : tab === "balance" ? (
         <BalanceTab from={from} to={to} />
-      ) : (
+      ) : tab === "coverage" ? (
         <CoverageTab from={from} to={to} />
+      ) : tab === "health" ? (
+        <HealthTab />
+      ) : (
+        <RoleBalanceTab />
       )}
+    </div>
+  );
+}
+
+function DownloadButton({ kind, label }: { kind: string; label: string }) {
+  return (
+    <a
+      href={`/reports/download?kind=${kind}`}
+      className="rounded-lg bg-gold-400 px-3 py-1.5 text-sm font-semibold text-ink-950 transition-opacity hover:opacity-90"
+    >
+      {label}
+    </a>
+  );
+}
+
+async function HealthTab() {
+  const t = await getT();
+  const { members, assignments } = await getChurnInputs();
+  // The ONLY clock read: churn reasons relative to "now". The engine is pure;
+  // the instant is supplied here so the report is reproducible from inputs.
+  const now = new Date().toISOString();
+  const report = buildChurnReport(members, assignments, now);
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <DownloadButton kind="churn" label={t("reports.downloadCsv")} />
+      </div>
+      <VolunteerHealthTable report={report} t={t} />
+    </div>
+  );
+}
+
+async function RoleBalanceTab() {
+  const t = await getT();
+  const { roles, qualifications, targets } = await getRoleBalanceInputs();
+  const report = buildRoleBalanceReport(roles, qualifications, targets);
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <DownloadButton kind="role_balance" label={t("reports.downloadCsv")} />
+      </div>
+      <RoleBalanceTable report={report} t={t} />
     </div>
   );
 }

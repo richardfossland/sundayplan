@@ -123,6 +123,9 @@ const en: Catalog = {
   "autofill.cta": "Auto-fill gaps",
   "autofill.busy": "Finding the best fit…",
   "autofill.tooltip": "We'll suggest the best-matched volunteer for each open slot — you stay in control and review the draft before anything is sent.",
+  "autofill.balanced.cta": "Auto-fill & balance load",
+  "autofill.balanced.tooltip": "Fills every open slot, then evens out the load across the whole period so the same volunteers aren't carrying everything — without bumping anyone who's unavailable.",
+  "autofill.balanced.summary": "Evened out the load: gap {before} → {after}, {swaps} reassignment(s).",
   "schedule.guidance": "We've drafted who fits each slot best. Anything flagged below is worth a second look before you invite.",
 
   // Swap queue — the planner side of the volunteer "find my replacement" flow.
@@ -890,6 +893,9 @@ const no: Catalog = {
   "autofill.cta": "Fyll åpne roller",
   "autofill.busy": "Finner beste match…",
   "autofill.tooltip": "Vi foreslår den best egnede frivillige for hver åpne rolle — du har kontrollen og ser over utkastet før noe sendes.",
+  "autofill.balanced.cta": "Fyll og fordel belastningen",
+  "autofill.balanced.tooltip": "Fyller alle åpne roller og jevner deretter ut belastningen over hele perioden, slik at ikke de samme frivillige bærer alt — uten å sette opp noen som er utilgjengelige.",
+  "autofill.balanced.summary": "Jevnet ut belastningen: forskjell {before} → {after}, {swaps} ombytte.",
   "schedule.guidance": "Vi har laget et utkast over hvem som passer best i hver rolle. Det som er flagget nedenfor er verdt en ekstra titt før du inviterer.",
 
   // Byttekø — planleggerens side av frivilliges «finn en avløser»-flyt.

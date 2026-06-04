@@ -62,7 +62,22 @@ function bucketSet<K, V>(map: Map<K, Set<V>>, key: K): Set<V> {
   return v;
 }
 
-export async function buildAutoFillSlots(now: Date = new Date()): Promise<AutoFillSlot[]> {
+export interface BuildAutoFillSlotsOptions {
+  /**
+   * When true, attach a `window_serves_prior` to each candidate — the count of
+   * assignments the member already holds across the whole planning window
+   * (active = not declined/removed). This is the cumulative-fairness signal the
+   * `balancedAutoFill` orchestrator flattens against, so a volunteer already
+   * loaded earlier in the window isn't picked again just because they rank #1.
+   * Default false → byte-identical to the original greedy-only slots.
+   */
+  withWindowPriors?: boolean;
+}
+
+export async function buildAutoFillSlots(
+  now: Date = new Date(),
+  options: BuildAutoFillSlotsOptions = {},
+): Promise<AutoFillSlot[]> {
   const supabase = await createClient();
   const [services, roles, assignments, members, memberships, credentials] = await Promise.all([
     supabase.from("service").select("id, starts_at_utc").order("starts_at_utc"),
@@ -116,11 +131,16 @@ export async function buildAutoFillSlots(now: Date = new Date()): Promise<AutoFi
   const acceptedAny = new Map<string, Date[]>();
   const acceptedByRole = new Map<string, Date[]>(); // key `${member}:${role}`
 
+  // Active serves a member already holds across the WHOLE planning window — the
+  // cumulative-fairness prior. Only populated when requested (default-safe).
+  const windowPriorByMember = new Map<string, number>();
+
   for (const a of assignmentRows) {
     const active = a.status !== "declined" && a.status !== "removed";
     if (active) {
       bucketSet(assignedInService, a.service_id).add(a.member_id);
       filledCell.add(`${a.service_id}:${a.role_id}`);
+      windowPriorByMember.set(a.member_id, (windowPriorByMember.get(a.member_id) ?? 0) + 1);
       if ((skillByMemberRole.get(`${a.member_id}:${a.role_id}`) ?? "capable") === "trainer") {
         trainerInService.add(a.service_id);
       }
@@ -167,6 +187,9 @@ export async function buildAutoFillSlots(now: Date = new Date()): Promise<AutoFi
           return {
             member_id: memberId,
             joined_at: m?.joined_at ?? null,
+            ...(options.withWindowPriors
+              ? { window_serves_prior: windowPriorByMember.get(memberId) ?? 0 }
+              : {}),
             inputs: {
               candidate: {
                 member_id: memberId,

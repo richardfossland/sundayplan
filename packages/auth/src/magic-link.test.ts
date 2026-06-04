@@ -94,6 +94,25 @@ describe("signMagicLink / verifyMagicLink", () => {
     expect(res.ok).toBe(true);
     if (res.ok) expect(res.claims.assignment_id).toBeUndefined();
   });
+
+  // Hardening (mirror of verifyChurchInvite's purpose guard): a church-invite
+  // token shares the same secret + machinery but carries no member_id/sub.
+  // verifyMagicLink must NOT accept it as a volunteer claim — otherwise the
+  // typed MagicLinkClaims it returns would lie (member_id/sub undefined),
+  // setting up cross-token privilege confusion for any caller that trusts
+  // res.claims.member_id without re-checking purpose.
+  it("refuses a church-invite token (cross-token confusion)", async () => {
+    const invite = await signChurchInvite(inviteOpts(), SECRET);
+    const res = await verifyMagicLink(invite, SECRET, 1_700_000_000);
+    expect(res).toEqual({ ok: false, reason: "wrong_purpose" });
+  });
+
+  it("guarantees member_id is present on a successful verify", async () => {
+    const token = await signMagicLink(opts(), SECRET);
+    const res = await verifyMagicLink(token, SECRET, 1_700_000_000);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(typeof res.claims.member_id).toBe("string");
+  });
 });
 
 function inviteOpts(overrides: Partial<InviteIssueOptions> = {}): InviteIssueOptions {

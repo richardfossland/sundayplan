@@ -22,14 +22,14 @@ function localDate(iso: string): string {
 }
 
 /** Whole days from `a` to `b` (b − a), using each value's local calendar day. */
-export function daysBetween(a: string, b: string): number {
+export function dayGapLocal(a: string, b: string): number {
   const da = Date.parse(`${localDate(a)}T00:00:00Z`);
   const db = Date.parse(`${localDate(b)}T00:00:00Z`);
   return Math.round((db - da) / 86_400_000);
 }
 
 /** Whole calendar months from `a` to `b` (b − a), can be negative. */
-export function monthsBetween(a: string, b: string): number {
+export function monthGapLocal(a: string, b: string): number {
   const [ay, am, ad] = localDate(a).split("-").map(Number);
   const [by, bm, bd] = localDate(b).split("-").map(Number);
   let months = (by - ay) * 12 + (bm - am);
@@ -204,14 +204,14 @@ export function buildChurnReport(
       if (m.joinedAtLocal == null) {
         firstServeUnknown += 1;
       } else {
-        const gap = Math.max(0, daysBetween(m.joinedAtLocal, firstServe.get(m.memberId)!));
+        const gap = Math.max(0, dayGapLocal(m.joinedAtLocal, firstServe.get(m.memberId)!));
         placeInBucket(buckets, gap);
       }
     }
 
     // (b) dropout — joined long ago, never served
     if (!served && m.joinedAtLocal != null) {
-      const monthsSinceJoin = monthsBetween(m.joinedAtLocal, now);
+      const monthsSinceJoin = monthGapLocal(m.joinedAtLocal, now);
       if (monthsSinceJoin >= cfg.dropoutJoinedMonths) {
         dropout.push({ memberId: m.memberId, name: m.name, joinedAtLocal: m.joinedAtLocal, monthsSinceJoin });
       }
@@ -220,7 +220,7 @@ export function buildChurnReport(
     // (c) at-risk — active, served before, now quiet
     if (m.status === "active" && served) {
       const last = lastServe.get(m.memberId)!;
-      const silent = daysBetween(last, now);
+      const silent = dayGapLocal(last, now);
       if (silent >= cfg.atRiskSilentDays) {
         atRisk.push({ memberId: m.memberId, name: m.name, lastServeLocal: last, daysSinceLastServe: silent });
       }
@@ -239,7 +239,7 @@ export function buildChurnReport(
     let stillActive = 0;
     for (const m of members) {
       if (m.joinedAtLocal == null) continue;
-      if (monthsBetween(m.joinedAtLocal, now) < months) continue;
+      if (monthGapLocal(m.joinedAtLocal, now) < months) continue;
       eligible += 1;
       if (m.status === "active") stillActive += 1;
     }

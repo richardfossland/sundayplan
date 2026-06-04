@@ -3,8 +3,8 @@ import {
   buildChurnReport,
   buildRoleBalanceReport,
   churnReportToCsv,
-  daysBetween,
-  monthsBetween,
+  dayGapLocal,
+  monthGapLocal,
   roleBalanceReportToCsv,
   DEFAULT_CHURN_CONFIG,
   type ChurnAssignment,
@@ -30,21 +30,21 @@ function serve(memberId: string, date: string): ChurnAssignment {
 
 // ── date helpers ─────────────────────────────────────────────────────────────
 
-describe("daysBetween / monthsBetween", () => {
+describe("dayGapLocal / monthGapLocal", () => {
   it("counts calendar days, sign-correct, DST-stable", () => {
-    expect(daysBetween("2026-06-01", "2026-06-08")).toBe(7);
-    expect(daysBetween("2026-06-08", "2026-06-01")).toBe(-7);
+    expect(dayGapLocal("2026-06-01", "2026-06-08")).toBe(7);
+    expect(dayGapLocal("2026-06-08", "2026-06-01")).toBe(-7);
     // span across a European DST change (last Sunday of March)
-    expect(daysBetween("2026-03-28", "2026-03-30")).toBe(2);
+    expect(dayGapLocal("2026-03-28", "2026-03-30")).toBe(2);
     // ISO instants reduce to their local day
-    expect(daysBetween("2026-06-01T23:00:00Z", "2026-06-02T01:00:00Z")).toBe(1);
+    expect(dayGapLocal("2026-06-01T23:00:00Z", "2026-06-02T01:00:00Z")).toBe(1);
   });
 
   it("only counts a whole month once day-of-month is reached", () => {
-    expect(monthsBetween("2026-01-31", "2026-02-15")).toBe(0);
-    expect(monthsBetween("2026-01-15", "2026-02-15")).toBe(1);
-    expect(monthsBetween("2026-01-15", "2026-02-14")).toBe(0);
-    expect(monthsBetween("2025-06-04", "2026-06-04")).toBe(12);
+    expect(monthGapLocal("2026-01-31", "2026-02-15")).toBe(0);
+    expect(monthGapLocal("2026-01-15", "2026-02-15")).toBe(1);
+    expect(monthGapLocal("2026-01-15", "2026-02-14")).toBe(0);
+    expect(monthGapLocal("2025-06-04", "2026-06-04")).toBe(12);
   });
 });
 

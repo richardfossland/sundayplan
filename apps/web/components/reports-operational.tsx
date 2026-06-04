@@ -1,4 +1,9 @@
-import type { VolunteerBalanceReport, ServiceCoverageReport } from "@sundayplan/sdk";
+import type {
+  VolunteerBalanceReport,
+  ServiceCoverageReport,
+  ChurnReport,
+  RoleBalanceReport,
+} from "@sundayplan/sdk";
 import { Badge, Card, StatTile } from "@/components/ui";
 import type { TFn } from "@/lib/i18n/server";
 
@@ -128,6 +133,246 @@ export function ServiceCoverageTable({ report, t }: { report: ServiceCoverageRep
                 <tr>
                   <td colSpan={5} className="px-4 py-8 text-center text-sm text-ink-500">
                     {t("reports.coverage.empty")}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </section>
+  );
+}
+
+// ── Volunteer health (churn / retention) ──────────────────────────────────────
+
+function bucketLabel(min: number, max: number | null): string {
+  return max == null ? `${min}+` : `${min}–${max}`;
+}
+
+export function VolunteerHealthTable({ report, t }: { report: ChurnReport; t: TFn }) {
+  const bucketTotal = report.firstServeBuckets.reduce((n, b) => n + b.count, 0) + report.firstServeUnknown;
+  return (
+    <section className="space-y-8">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight text-ink-50">{t("reports.health.heading")}</h2>
+        <p className="mt-1 max-w-2xl text-xs text-ink-500">{t("reports.health.blurb")}</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile label={t("reports.health.stat.members")} value={report.totals.members} />
+        <StatTile label={t("reports.health.stat.everServed")} value={report.totals.everServed} />
+        <StatTile
+          label={t("reports.health.stat.atRisk")}
+          value={report.atRisk.length}
+          tone={report.atRisk.length > 0 ? "warning" : "neutral"}
+        />
+        <StatTile
+          label={t("reports.health.stat.dropout")}
+          value={report.dropout.length}
+          tone={report.dropout.length > 0 ? "danger" : "neutral"}
+        />
+      </div>
+
+      {/* Retention snapshot */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-ink-200">{t("reports.health.retention.heading")}</h3>
+        <div className="grid grid-cols-3 gap-3">
+          {report.retention.map((p) => (
+            <StatTile
+              key={p.months}
+              label={t("reports.health.retention.label", { months: p.months })}
+              value={p.rate == null ? "—" : `${Math.round(p.rate * 100)}%`}
+              hint={t("reports.health.retention.hint", { active: p.stillActive, eligible: p.eligible })}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* Time-to-first-assignment histogram */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-ink-200">{t("reports.health.firstServe.heading")}</h3>
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[420px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-white/[0.07] text-left text-xs font-medium uppercase tracking-wider text-ink-500">
+                  <th className="px-4 py-3">{t("reports.health.firstServe.col.bucket")}</th>
+                  <th className="px-4 py-3 text-right">{t("reports.health.firstServe.col.count")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.firstServeBuckets.map((b) => (
+                  <tr key={b.key} className="border-b border-white/[0.04] last:border-0">
+                    <td className="px-4 py-3 text-ink-100">
+                      {t("reports.health.firstServe.days", { range: bucketLabel(b.minDays, b.maxDays) })}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-ink-200">{b.count}</td>
+                  </tr>
+                ))}
+                <tr className="border-b border-white/[0.04] last:border-0">
+                  <td className="px-4 py-3 text-ink-400">{t("reports.health.firstServe.unknown")}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-ink-400">{report.firstServeUnknown}</td>
+                </tr>
+                {bucketTotal === 0 && (
+                  <tr>
+                    <td colSpan={2} className="px-4 py-8 text-center text-sm text-ink-500">
+                      {t("reports.health.empty")}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+
+      {/* At-risk list */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-ink-200">{t("reports.health.atRisk.heading")}</h3>
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-white/[0.07] text-left text-xs font-medium uppercase tracking-wider text-ink-500">
+                  <th className="px-4 py-3">{t("reports.health.col.volunteer")}</th>
+                  <th className="px-4 py-3">{t("reports.health.atRisk.col.lastServe")}</th>
+                  <th className="px-4 py-3 text-right">{t("reports.health.atRisk.col.silentDays")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.atRisk.map((a) => (
+                  <tr key={a.memberId} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
+                    <td className="px-4 py-3 text-ink-100">{a.name}</td>
+                    <td className="px-4 py-3 text-[0.75rem] text-ink-500">{a.lastServeLocal}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[color:var(--color-warning)]">
+                      {a.daysSinceLastServe}
+                    </td>
+                  </tr>
+                ))}
+                {report.atRisk.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-6 text-center text-sm text-ink-500">
+                      {t("reports.health.atRisk.empty")}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+
+      {/* Dropout list */}
+      <div>
+        <h3 className="mb-3 text-sm font-semibold text-ink-200">{t("reports.health.dropout.heading")}</h3>
+        <Card>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[480px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-white/[0.07] text-left text-xs font-medium uppercase tracking-wider text-ink-500">
+                  <th className="px-4 py-3">{t("reports.health.col.volunteer")}</th>
+                  <th className="px-4 py-3">{t("reports.health.dropout.col.joined")}</th>
+                  <th className="px-4 py-3 text-right">{t("reports.health.dropout.col.months")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {report.dropout.map((d) => (
+                  <tr key={d.memberId} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
+                    <td className="px-4 py-3 text-ink-100">{d.name}</td>
+                    <td className="px-4 py-3 text-[0.75rem] text-ink-500">{d.joinedAtLocal}</td>
+                    <td className="px-4 py-3 text-right tabular-nums text-[color:var(--color-danger)]">
+                      {d.monthsSinceJoin}
+                    </td>
+                  </tr>
+                ))}
+                {report.dropout.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-6 text-center text-sm text-ink-500">
+                      {t("reports.health.dropout.empty")}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      </div>
+    </section>
+  );
+}
+
+// ── Role balance (recruiting heatmap) ─────────────────────────────────────────
+
+function roleDeltaCell(line: RoleBalanceReport["lines"][number], t: TFn) {
+  if (line.delta == null) return <span className="text-ink-600">—</span>;
+  if (line.status === "over")
+    return <span className="tabular-nums text-[color:var(--color-success)]">+{line.delta}</span>;
+  if (line.status === "under")
+    return <span className="tabular-nums text-[color:var(--color-danger)]">{line.delta}</span>;
+  return <span className="tabular-nums text-ink-300">{t("reports.roleBalance.balanced")}</span>;
+}
+
+export function RoleBalanceTable({ report, t }: { report: RoleBalanceReport; t: TFn }) {
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight text-ink-50">{t("reports.roleBalance.heading")}</h2>
+        <p className="mt-1 max-w-2xl text-xs text-ink-500">{t("reports.roleBalance.blurb")}</p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile label={t("reports.roleBalance.stat.roles")} value={report.totals.roles} />
+        <StatTile
+          label={t("reports.roleBalance.stat.underStaffed")}
+          value={report.totals.underStaffed}
+          tone={report.totals.underStaffed > 0 ? "danger" : "neutral"}
+        />
+        <StatTile label={t("reports.roleBalance.stat.overStaffed")} value={report.totals.overStaffed} tone="gold" />
+        <StatTile
+          label={t("reports.roleBalance.stat.shortfall")}
+          value={report.totals.totalShortfall}
+          tone={report.totals.totalShortfall > 0 ? "warning" : "neutral"}
+        />
+      </div>
+
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[620px] border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-white/[0.07] text-left text-xs font-medium uppercase tracking-wider text-ink-500">
+                <th className="px-4 py-3">{t("reports.roleBalance.col.role")}</th>
+                <th className="px-4 py-3">{t("reports.roleBalance.col.team")}</th>
+                <th className="px-4 py-3 text-right">{t("reports.roleBalance.col.active")}</th>
+                <th className="px-4 py-3 text-right">{t("reports.roleBalance.col.qualified")}</th>
+                <th className="px-4 py-3 text-right">{t("reports.roleBalance.col.target")}</th>
+                <th className="px-4 py-3 text-right">{t("reports.roleBalance.col.delta")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.lines.map((l) => (
+                <tr key={l.roleId} className="border-b border-white/[0.04] last:border-0 hover:bg-white/[0.02]">
+                  <td className="px-4 py-3 text-ink-100">
+                    {l.status === "under" ? (
+                      <span className="flex items-center gap-2">
+                        {l.role}
+                        <Badge tone="danger">{t("reports.roleBalance.recruit")}</Badge>
+                      </span>
+                    ) : (
+                      l.role
+                    )}
+                  </td>
+                  <td className="px-4 py-3 text-[0.75rem] text-ink-500">{l.teamName ?? "—"}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-ink-200">{l.activeQualified}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-ink-400">{l.qualified}</td>
+                  <td className="px-4 py-3 text-right tabular-nums text-ink-400">{l.target ?? "—"}</td>
+                  <td className="px-4 py-3 text-right">{roleDeltaCell(l, t)}</td>
+                </tr>
+              ))}
+              {report.lines.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-ink-500">
+                    {t("reports.roleBalance.empty")}
                   </td>
                 </tr>
               )}

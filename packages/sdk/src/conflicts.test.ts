@@ -3,11 +3,14 @@ import type { Availability, SkillLevel } from "@sundayplan/shared";
 import {
   detectConflicts,
   previewCandidate,
+  violatesRestWindow,
   type ConflictContext,
   type MemberInfo,
   type PlacedAssignment,
   type ServiceInfo,
 } from "./conflicts";
+
+const REST_DAY_MS = 86_400_000;
 
 // Anchors: 2026-01-04 is a Sunday; consecutive Sundays follow at +7 days.
 const SUN = ["2026-01-04", "2026-01-11", "2026-01-18", "2026-01-25"] as const;
@@ -779,5 +782,142 @@ describe("previewCandidate", () => {
     };
     const conflicts = previewCandidate(ctx, asg("m1", "s1", "r3"));
     expect(conflicts.every((c) => c.member_id === "m1")).toBe(true);
+  });
+});
+
+// ── Rule 11: hard minimum rest window ────────────────────────────────────────
+describe("rule 11 — min_rest_window (hard, configurable)", () => {
+  // Two services 5 days apart for the same member.
+  function spacedCtx(gapDays: number): ConflictContext {
+    const t0 = "2026-03-01"; // a Sunday
+    const t1 = new Date(`${t0}T11:00:00Z`);
+    const t2 = new Date(t1.getTime() + gapDays * REST_DAY_MS);
+    return {
+      services: [
+        { id: "s1", starts_at: t1 },
+        { id: "s2", starts_at: t2 },
+      ],
+      members: [member("m1")],
+      assignments: [asg("m1", "s1", "r1"), asg("m1", "s2", "r1")],
+    };
+  }
+
+  it("is OFF by default (min_rest_days unset) — no behaviour change", () => {
+    const hits = only("min_rest_window", detectConflicts(spacedCtx(2)));
+    expect(hits).toHaveLength(0);
+  });
+
+  it("is OFF when min_rest_days = 0 even for two same-day services", () => {
+    const ctx = spacedCtx(0);
+    ctx.config = { min_rest_days: 0 };
+    expect(only("min_rest_window", detectConflicts(ctx))).toHaveLength(0);
+  });
+
+  it("flags an assignment placed too soon after a previous one", () => {
+    const ctx = spacedCtx(5);
+    ctx.config = { min_rest_days: 6 }; // need 6, only 5 elapsed → violation
+    const hits = only("min_rest_window", detectConflicts(ctx));
+    expect(hits).toHaveLength(1);
+    expect(hits[0]).toMatchObject({
+      severity: "hard",
+      member_id: "m1",
+      service_id: "s2", // the LATER service is flagged
+    });
+  });
+
+  it("passes a sufficiently-spaced pair (gap >= window)", () => {
+    const ctx = spacedCtx(6);
+    ctx.config = { min_rest_days: 6 }; // exactly 6 elapsed → OK (>= window)
+    expect(only("min_rest_window", detectConflicts(ctx))).toHaveLength(0);
+  });
+
+  it("treats two services on the SAME day as a violation when window >= 1", () => {
+    // Distinct service ids, same calendar day — gap 0 < window. This is the hard
+    // upgrade over the soft same_day rule.
+    const ctx = spacedCtx(0);
+    ctx.config = { min_rest_days: 1 };
+    const hits = only("min_rest_window", detectConflicts(ctx));
+    expect(hits).toHaveLength(1);
+    expect(hits[0].member_id).toBe("m1");
+  });
+
+  it("does NOT flag two roles in the SAME service (that is double_booking, gap 0)", () => {
+    const ctx: ConflictContext = {
+      services: [{ id: "s1", starts_at: new Date("2026-03-01T11:00:00Z") }],
+      members: [member("m1")],
+      assignments: [asg("m1", "s1", "r1"), asg("m1", "s1", "r2")],
+      config: { min_rest_days: 7 },
+    };
+    expect(only("min_rest_window", detectConflicts(ctx))).toHaveLength(0);
+  });
+
+  it("only flags the member whose gap is too small", () => {
+    const t1 = new Date("2026-03-01T11:00:00Z");
+    const t2 = new Date(t1.getTime() + 3 * REST_DAY_MS);
+    const t3 = new Date(t1.getTime() + 30 * REST_DAY_MS);
+    const ctx: ConflictContext = {
+      services: [
+        { id: "s1", starts_at: t1 },
+        { id: "s2", starts_at: t2 },
+        { id: "s3", starts_at: t3 },
+      ],
+      members: [member("m1"), member("m2")],
+      // m1: s1 + s2 (3 days apart → violation). m2: s1 + s3 (well spaced).
+      assignments: [asg("m1", "s1", "r1"), asg("m1", "s2", "r1"), asg("m2", "s1", "r2"), asg("m2", "s3", "r2")],
+      config: { min_rest_days: 6 },
+    };
+    const hits = only("min_rest_window", detectConflicts(ctx));
+    expect(hits).toHaveLength(1);
+    expect(hits[0].member_id).toBe("m1");
+  });
+
+  it("previewCandidate surfaces a rest-window violation for the candidate", () => {
+    const t1 = new Date("2026-03-01T11:00:00Z");
+    const t2 = new Date(t1.getTime() + 2 * REST_DAY_MS);
+    const ctx: ConflictContext = {
+      services: [
+        { id: "s1", starts_at: t1 },
+        { id: "s2", starts_at: t2 },
+      ],
+      members: [member("m1")],
+      assignments: [asg("m1", "s1", "r1")],
+      config: { min_rest_days: 7 },
+    };
+    const conflicts = previewCandidate(ctx, asg("m1", "s2", "r1"));
+    expect(conflicts.some((c) => c.rule === "min_rest_window")).toBe(true);
+  });
+
+  it("is deterministic across repeated runs", () => {
+    const ctx = spacedCtx(2);
+    ctx.config = { min_rest_days: 6 };
+    const a = JSON.stringify(detectConflicts(ctx));
+    const b = JSON.stringify(detectConflicts(ctx));
+    expect(a).toBe(b);
+  });
+});
+
+describe("violatesRestWindow (shared pure helper)", () => {
+  const base = new Date("2026-03-01T00:00:00Z").getTime();
+  const at = (d: number) => base + d * REST_DAY_MS;
+
+  it("returns false when the window is off (<= 0)", () => {
+    expect(violatesRestWindow(at(0), [at(0), at(1)], 0)).toBe(false);
+    expect(violatesRestWindow(at(0), [at(1)], -1)).toBe(false);
+  });
+
+  it("returns false when no other time is within the window", () => {
+    expect(violatesRestWindow(at(10), [at(0), at(20)], 6)).toBe(false);
+  });
+
+  it("returns true when an other time is closer than the window", () => {
+    expect(violatesRestWindow(at(3), [at(0)], 6)).toBe(true); // 3 < 6
+  });
+
+  it("treats an exact-same-instant match as not a rest gap (same service)", () => {
+    expect(violatesRestWindow(at(5), [at(5)], 6)).toBe(false);
+  });
+
+  it("uses absolute distance — a future commitment counts too", () => {
+    expect(violatesRestWindow(at(0), [at(2)], 6)).toBe(true); // |0-2| = 2 < 6
   });
 });

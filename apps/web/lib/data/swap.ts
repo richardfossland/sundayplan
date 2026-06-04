@@ -57,7 +57,7 @@ export async function findReplacements(
       "id, display_name, household, joined_at, target_serves_per_month, availability(id, member_id, kind, pattern, reason, reason_visibility)",
     ),
     sb.from("team_membership").select("member_id, role_id, skill_level, is_key_person"),
-    sb.from("church_settings").select("default_max_assignments_per_month, unfilled_warn_days, max_consecutive_sundays"),
+    sb.from("church_settings").select("default_max_assignments_per_month, unfilled_warn_days, max_consecutive_sundays, min_rest_days"),
   ]);
 
   interface ServiceRow { id: string; starts_at_utc: string }
@@ -76,7 +76,12 @@ export async function findReplacements(
   const members = (membersRes.data ?? []) as MemberRow[];
   const memberships = (membershipsRes.data ?? []) as MshipRow[];
   const settings = (Array.isArray(settingsRes.data) ? settingsRes.data[0] : settingsRes.data) as
-    | { default_max_assignments_per_month?: number; unfilled_warn_days?: number; max_consecutive_sundays?: number }
+    | {
+        default_max_assignments_per_month?: number;
+        unfilled_warn_days?: number;
+        max_consecutive_sundays?: number;
+        min_rest_days?: number;
+      }
     | null;
 
   const serviceStart = new Map(services.map((s) => [s.id, new Date(s.starts_at_utc)]));
@@ -125,6 +130,9 @@ export async function findReplacements(
     config: {
       unfilled_warn_days: settings?.unfilled_warn_days ?? 7,
       max_consecutive_sundays: settings?.max_consecutive_sundays ?? 3,
+      // Hard rest window (rule 11) — 0 = off, so swap suggestions that violate a
+      // configured window are surfaced as a hard conflict like everywhere else.
+      min_rest_days: settings?.min_rest_days ?? 0,
     },
     now,
   };

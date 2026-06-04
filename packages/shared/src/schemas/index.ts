@@ -55,6 +55,8 @@ export const ChurchSettingsInputSchema = z.object({
     .optional(),
   unfilled_warn_days: z.number().int().min(1).max(60).optional(),
   max_consecutive_sundays: z.number().int().min(1).max(52).optional(),
+  // 0 = off; matches the migration's check (0..90).
+  min_rest_days: z.number().int().min(0).max(90).optional(),
   auto_buy_sms_overage: z.boolean().optional(),
   single_use_response_links: z.boolean().optional(),
 });
@@ -471,4 +473,6 @@ export const ReportParamsSchema = z.object({
   to: z.string().min(1),
 });
 
+/** Licensing reports take a date window; analytics reports don't. */
 export const ReportKind = z.enum(["tono", "ccli"]);
+export const AnalyticsReportKind = z.enum(["churn", "role_balance"]);

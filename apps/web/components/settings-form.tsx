@@ -163,6 +163,18 @@ export function VolunteerRulesForm({ settings }: { settings: ChurchSettings }) {
               />
               <p className={hint}>{t("settings.scheduling.maxConsecutive.hint")}</p>
             </div>
+            <div>
+              <label className={label}>{t("settings.scheduling.minRest")}</label>
+              <input
+                name="min_rest_days"
+                type="number"
+                min={0}
+                max={90}
+                defaultValue={settings.min_rest_days}
+                className={input}
+              />
+              <p className={hint}>{t("settings.scheduling.minRest.hint")}</p>
+            </div>
           </div>
         </section>
 

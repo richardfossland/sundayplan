@@ -143,7 +143,7 @@ export async function getSchedule(locale = "no"): Promise<ScheduleData> {
       supabase.from("member_credential").select("member_id, kind, status, expires_at"),
       supabase
         .from("church_settings")
-        .select("default_max_assignments_per_month, unfilled_warn_days, max_consecutive_sundays")
+        .select("default_max_assignments_per_month, unfilled_warn_days, max_consecutive_sundays, min_rest_days")
         .maybeSingle(),
     ]);
 
@@ -166,6 +166,9 @@ export async function getSchedule(locale = "no"): Promise<ScheduleData> {
     unfilled_warn_days: (settings.data?.unfilled_warn_days as number | undefined) ?? 7,
     max_consecutive_sundays:
       (settings.data?.max_consecutive_sundays as number | undefined) ?? 3,
+    // Default 0 = off (and the column may not exist pre-migration 0014), so the
+    // hard rest-window rule stays dormant until a church opts in.
+    min_rest_days: (settings.data?.min_rest_days as number | undefined) ?? 0,
   };
 
   const gridServices: GridService[] = serviceRows.map((s) => ({

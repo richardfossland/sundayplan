@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { autoFill } from "@sundayplan/sdk";
+import { autoFill, balancedAutoFill, type FairnessSummary } from "@sundayplan/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/data/church";
 import { buildAutoFillSlots } from "@/lib/data/autofill";
@@ -82,8 +82,8 @@ export async function autoFillSchedule(): Promise<void> {
   const churchId = await getCurrentChurchId();
   if (!churchId) return;
 
-  const slots = await buildAutoFillSlots();
-  const { assignments } = autoFill(slots);
+  const { slots, minRestDays } = await buildAutoFillSlots();
+  const { assignments } = autoFill(slots, { minRestDays });
   if (assignments.length === 0) {
     revalidatePath("/schedule");
     return;
@@ -102,4 +102,40 @@ export async function autoFillSchedule(): Promise<void> {
     .from("assignment")
     .upsert(rows, { onConflict: "service_id,role_id,member_id" });
   revalidatePath("/schedule");
+}
+
+/**
+ * Global-fairness auto-fill (opt-in). Same write semantics as
+ * {@link autoFillSchedule} — only empty cells are touched, proposals land as
+ * pending/'auto_fill' for the planner to review — but the proposal set comes
+ * from `balancedAutoFill`, which flattens volunteer load across the whole
+ * window after the greedy pass (reducing burnout) without introducing a hard
+ * conflict or materially lowering fit. Returns the fairness summary so the UI
+ * can show what it balanced; the greedy `autoFillSchedule` stays available.
+ */
+export async function autoFillScheduleBalanced(): Promise<{ fairness: FairnessSummary } | null> {
+  const churchId = await getCurrentChurchId();
+  if (!churchId) return null;
+
+  const { slots, minRestDays } = await buildAutoFillSlots(new Date(), { withWindowPriors: true });
+  const { assignments, fairness } = balancedAutoFill(slots, { minRestDays });
+  if (assignments.length === 0) {
+    revalidatePath("/schedule");
+    return { fairness };
+  }
+
+  const supabase = await createClient();
+  const rows = assignments.map((a) => ({
+    church_id: churchId,
+    service_id: a.service_id,
+    role_id: a.role_id,
+    member_id: a.member_id,
+    status: "pending",
+    created_by: "auto_fill",
+  }));
+  await supabase
+    .from("assignment")
+    .upsert(rows, { onConflict: "service_id,role_id,member_id" });
+  revalidatePath("/schedule");
+  return { fairness };
 }

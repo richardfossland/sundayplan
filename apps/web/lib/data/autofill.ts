@@ -12,6 +12,7 @@
  * frequency — and sharpens automatically as real history accrues.
  */
 import {
+  consecutiveWeeksServed,
   isBlockedByCredentials,
   type AutoFillSlot,
   type CredentialKind,
@@ -21,7 +22,6 @@ import type { Availability, SkillLevel } from "@sundayplan/shared";
 import { createClient } from "@/lib/supabase/server";
 
 const DAY_MS = 86_400_000;
-const WEEK_MS = 7 * DAY_MS;
 
 interface ServiceRow {
   id: string;
@@ -60,20 +60,6 @@ function bucketSet<K, V>(map: Map<K, Set<V>>, key: K): Set<V> {
   let v = map.get(key);
   if (!v) map.set(key, (v = new Set<V>()));
   return v;
-}
-
-/** Trailing run of consecutive ISO-ish weeks (latest-served backwards). */
-function consecutiveWeeks(dates: Date[]): number {
-  if (dates.length === 0) return 0;
-  const weeks = [...new Set(dates.map((d) => Math.floor(d.getTime() / WEEK_MS)))].sort(
-    (a, b) => b - a,
-  );
-  let run = 1;
-  for (let i = 1; i < weeks.length; i++) {
-    if (weeks[i] === weeks[i - 1] - 1) run++;
-    else break;
-  }
-  return run;
 }
 
 export async function buildAutoFillSlots(now: Date = new Date()): Promise<AutoFillSlot[]> {
@@ -193,7 +179,7 @@ export async function buildAutoFillSlots(now: Date = new Date()): Promise<AutoFi
                 ),
                 target_serves_per_month: m?.target_serves_per_month ?? 2,
                 availability: m?.availability ?? [],
-                consecutive_weeks_served: consecutiveWeeks(anyDates ?? []),
+                consecutive_weeks_served: consecutiveWeeksServed(anyDates ?? [], now),
                 has_frequent_partner_on_service: false, // partner data not modelled
                 has_trainer_paired: skill === "training" && trainerInService.has(svc.id),
               },

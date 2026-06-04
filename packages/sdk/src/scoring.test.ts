@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Availability, ScoreBreakdown, SkillLevel } from "@sundayplan/shared";
-import { DEFAULT_WEIGHTS, rankCandidates, scoreCandidate, type ScoringInputs } from "./scoring";
+import {
+  DEFAULT_WEIGHTS,
+  consecutiveWeeksServed,
+  rankCandidates,
+  scoreCandidate,
+  type ScoringInputs,
+} from "./scoring";
 
 /**
  * Baseline candidate that lands on a clean, fully-derivable score so each
@@ -342,5 +348,40 @@ describe("rankCandidates", () => {
 
   it("returns an empty list when everyone is unavailable", () => {
     expect(rankCandidates([{ id: "a", score: null }, { id: "b", score: null }])).toEqual([]);
+  });
+});
+
+describe("consecutiveWeeksServed", () => {
+  it("returns 0 for no history", () => {
+    expect(consecutiveWeeksServed([], new Date("2026-06-04T12:00:00Z"))).toBe(0);
+  });
+
+  it("does NOT count a stale run that ended long ago (rested member)", () => {
+    // Served 3 consecutive Sundays in March, nothing since; planning in June.
+    const march = [
+      new Date("2026-03-01T10:00:00Z"),
+      new Date("2026-03-08T10:00:00Z"),
+      new Date("2026-03-15T10:00:00Z"),
+    ];
+    expect(consecutiveWeeksServed(march, new Date("2026-06-04T10:00:00Z"))).toBe(0);
+  });
+
+  it("counts an active run reaching the current week", () => {
+    const recent = [
+      new Date("2026-05-24T10:00:00Z"), // Sun
+      new Date("2026-05-31T10:00:00Z"), // Sun
+      new Date("2026-06-03T10:00:00Z"), // Wed of the current week
+    ];
+    expect(consecutiveWeeksServed(recent, new Date("2026-06-04T10:00:00Z"))).toBe(3);
+  });
+
+  it("treats two services in the same Mon–Sun week as one (no Thursday-epoch split)", () => {
+    // Wed 23:00Z and Thu 01:00Z are ~2h apart and in the same calendar week,
+    // but a Thursday-anchored epoch bucket would split them into two weeks.
+    const sameWeek = [
+      new Date("2026-03-04T23:00:00Z"), // Wed
+      new Date("2026-03-05T01:00:00Z"), // Thu, ~2h later, same Mon–Sun week
+    ];
+    expect(consecutiveWeeksServed(sameWeek, new Date("2026-03-05T12:00:00Z"))).toBe(1);
   });
 });

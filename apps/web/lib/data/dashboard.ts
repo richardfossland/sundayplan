@@ -7,8 +7,7 @@
  *  - pending RSVPs            → assignment.status in (invited, no_response)
  *  - onboarding checklist     → cheap head-count probes
  *
- * Everything reads under the planner's RLS (cookie-bound server client). This
- * replaces the old `@/lib/mock` fixtures the dashboard used to render.
+ * Everything reads under the planner's RLS (cookie-bound server client).
  */
 import type { Conflict } from "@sundayplan/sdk";
 import { createClient } from "@/lib/supabase/server";

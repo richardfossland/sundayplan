@@ -9,6 +9,7 @@ export * from "./scoring";
 export * from "./rationale-refiner";
 export * from "./conflicts";
 export * from "./autofill";
+export * from "./balancedAutofill";
 export * from "./swap";
 export * from "./credentials";
 export * from "./setlist-ai";

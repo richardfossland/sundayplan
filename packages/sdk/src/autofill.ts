@@ -33,6 +33,19 @@ export interface AutoFillCandidate {
   joined_at: string | null;
   /** Fully-built scoring inputs for this (candidate, slot) pair. */
   inputs: ScoringInputs;
+  /**
+   * Cumulative serves this member already carries coming INTO the planning
+   * window — the global-fairness signal `balancedAutoFill` flattens against so
+   * early-window volunteers aren't hammered. Default-safe: omitted/0 means
+   * "no prior load", which leaves the base greedy `autoFill` unchanged.
+   */
+  window_serves_prior?: number;
+  /**
+   * A locked/manual assignment the planner has pinned to this slot. Pinned
+   * members occupy the slot (counting toward load + double-booking) and are
+   * NEVER moved by the balancing pass. Ignored by the base greedy `autoFill`.
+   */
+  pinned?: boolean;
 }
 
 export interface AutoFillSlot {

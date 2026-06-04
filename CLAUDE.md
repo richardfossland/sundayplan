@@ -43,15 +43,16 @@ A volunteer or part-time staffer at a small church (10-300 people) who is curren
 ```
 sundayplan/
 ├── apps/
-│   ├── web/              Next.js admin (planners, leaders)
-│   ├── mobile/           Expo app (volunteers + leaders on mobile)
-│   └── functions/        Supabase Edge Functions (Deno)
+│   ├── web/              Next.js admin (planners, leaders) — also hosts the
+│   │                     UI primitives in components/ui.tsx
+│   └── mobile/           Expo app (volunteers + leaders on mobile)
 ├── packages/
-│   ├── sdk/              Typed client SDK (used by web + mobile)
-│   ├── ui-web/           shadcn-based primitives (web only)
-│   ├── ui-mobile/        RN primitives (mobile only)
+│   ├── sdk/              Typed client SDK + scheduling engines (used by web + mobile)
 │   ├── shared/           Domain types, Zod schemas, business rules
+│   ├── auth/             Server-only auth primitives (magic-link JWT, RSVP)
 │   └── db/               Supabase migrations + generated types
+├── supabase/
+│   └── functions/        Supabase Edge Functions (Deno)
 ├── docs/
 └── turbo.json
 ```
@@ -63,14 +64,18 @@ sundayplan/
 - Children's check-in with safety / family management
 - Full CRM (visitor pipeline, follow-ups)
 
-## What this scaffold contains (May 2026)
+## What this repo contains (June 2026)
 
 - Turborepo + pnpm-workspace plumbing
 - Domain model documented in `docs/DOMAIN.md` (Mermaid ERD)
-- Supabase migrations: tenancy + core domain
+- Supabase migrations: tenancy + core domain (`packages/db`) + Edge Functions
+  (`supabase/functions`)
 - Shared TypeScript types + Zod schemas in `packages/shared`
-- Next.js 15 web app scaffold in `apps/web` (empty but builds)
-- Expo app scaffold in `apps/mobile` (empty but typechecks)
+- Scheduling/auto-fill/conflict/coverage engines + typed SDK in `packages/sdk`
+- Server-only auth primitives (magic-link JWT, RSVP) in `packages/auth`
+- Next.js 15 web app in `apps/web` — full pages, server actions, and a
+  Supabase-backed data layer (`lib/data/*`); UI primitives in `components/ui.tsx`
+- Expo app scaffold in `apps/mobile` (still a placeholder — typechecks)
 
 ## What's pending
 

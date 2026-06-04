@@ -473,4 +473,6 @@ export const ReportParamsSchema = z.object({
   to: z.string().min(1),
 });
 
+/** Licensing reports take a date window; analytics reports don't. */
 export const ReportKind = z.enum(["tono", "ccli"]);
+export const AnalyticsReportKind = z.enum(["churn", "role_balance"]);

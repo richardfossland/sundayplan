@@ -14,6 +14,7 @@ const SECTIONS: { heading: string | null; items: { href: string; key: string }[]
     items: [
       { href: "/services", key: "nav.services" },
       { href: "/schedule", key: "nav.schedule" },
+      { href: "/swaps", key: "nav.swaps" },
       { href: "/songs", key: "nav.songs" },
     ],
   },

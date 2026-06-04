@@ -186,3 +186,88 @@ export async function findReplacements(
 
   return eligibleReplacements({ ctx, candidates, excludeMemberIds: [assignment.member_id] });
 }
+
+/**
+ * One open swap row, joined to the human-readable context a planner needs to act
+ * on it: who handed the slot back, which service/role, and when the service is.
+ * Resolved entirely server-side so the planner page is a thin render.
+ */
+export interface OpenSwap {
+  id: string;
+  assignment_id: string;
+  status: string;
+  note: string | null;
+  created_at: string;
+  requested_by_member_id: string;
+  requested_by_name: string;
+  service_id: string;
+  service_title: string;
+  service_starts_at: string;
+  role_id: string;
+  role_name: string;
+  /** The vacated member on the original assignment (for findReplacements input). */
+  vacated_member_id: string;
+}
+
+/**
+ * Minimal client surface for the planner-side reads here. We only need a
+ * filtered, ordered single-table select; the chaining is intentionally typed
+ * with `any` so structurally matching the full Supabase builder doesn't trip
+ * TS's "excessively deep" guard (the runtime contract is exact).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type QueryClient = { from: (table: string) => any };
+
+interface OpenSwapRow {
+  id: string;
+  assignment_id: string;
+  status: string;
+  note: string | null;
+  created_at: string;
+  requested_by_member_id: string;
+  requester: { display_name: string } | null;
+  assignment: {
+    member_id: string;
+    service_id: string;
+    role_id: string;
+    role: { name: string } | null;
+    service: { name: string; starts_at_utc: string } | null;
+  } | null;
+}
+
+/**
+ * List the church's open swap requests (volunteers who handed a slot back),
+ * newest first, with service/role/requester resolved. Reads under whatever
+ * client is passed — planners use the RLS server client, which scopes to their
+ * church and to the `swap_planner_all` policy.
+ */
+export async function listOpenSwaps(supabase: QueryClient): Promise<OpenSwap[]> {
+  const { data } = await supabase
+    .from("swap_request")
+    .select(
+      "id, assignment_id, status, note, created_at, requested_by_member_id, " +
+        "requester:requested_by_member_id(display_name), " +
+        "assignment:assignment_id(member_id, service_id, role_id, role:role_id(name), service:service_id(name, starts_at_utc))",
+    )
+    .eq("status", "open")
+    .order("created_at", { ascending: false });
+
+  const rows = (data ?? []) as unknown as OpenSwapRow[];
+  return rows
+    .filter((r) => r.assignment != null)
+    .map((r) => ({
+      id: r.id,
+      assignment_id: r.assignment_id,
+      status: r.status,
+      note: r.note,
+      created_at: r.created_at,
+      requested_by_member_id: r.requested_by_member_id,
+      requested_by_name: r.requester?.display_name ?? r.requested_by_member_id,
+      service_id: r.assignment!.service_id,
+      service_title: r.assignment!.service?.name ?? "",
+      service_starts_at: r.assignment!.service?.starts_at_utc ?? "",
+      role_id: r.assignment!.role_id,
+      role_name: r.assignment!.role?.name ?? "",
+      vacated_member_id: r.assignment!.member_id,
+    }));
+}

@@ -2,8 +2,7 @@
  * People data layer — real Supabase queries behind the cookie-bound server
  * client, so every read runs under the signed-in planner's RLS (scoped to
  * their church). Replaces the `buildPeople`/`getPerson` mock for the People
- * registry. The dashboard demo still uses lib/mock.ts for the SDK-engine
- * showcase until those reads are wired too.
+ * registry.
  */
 import { createClient } from "@/lib/supabase/server";
 import type { CredentialKind, CredentialStatus } from "@sundayplan/sdk";

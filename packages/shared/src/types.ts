@@ -48,6 +48,8 @@ export interface ChurchSettings {
   unfilled_warn_days: number;
   /** Conflict-engine threshold: warn when a member serves more than this many consecutive Sundays. */
   max_consecutive_sundays: number;
+  /** Hard conflict rule: forbid serving again within this many days. 0 = off (default). */
+  min_rest_days: number;
   /** Opt-in: mint strict one-shot volunteer response links instead of reusable ones. */
   single_use_response_links: boolean;
   sms_quota_used: number;

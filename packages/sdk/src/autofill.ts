@@ -26,6 +26,7 @@
 
 import type { ScoreBreakdown } from "@sundayplan/shared";
 import { scoreCandidate, type ScoringInputs } from "./scoring";
+import { violatesRestWindow } from "./conflicts";
 
 export interface AutoFillCandidate {
   member_id: string;
@@ -46,6 +47,14 @@ export interface AutoFillCandidate {
    * NEVER moved by the balancing pass. Ignored by the base greedy `autoFill`.
    */
   pinned?: boolean;
+  /**
+   * Epoch-ms timestamps of OTHER services this member is already committed to
+   * outside this run (existing accepted/pending assignments). Used only by the
+   * rest-window gate (when `minRestDays > 0`): a candidate is skipped for a slot
+   * whose date sits within the window of any of these. Default empty → no gate.
+   * The slot's OWN date is read from `inputs.slot.service_starts_at`.
+   */
+  committed_times?: number[];
 }
 
 export interface AutoFillSlot {
@@ -84,16 +93,35 @@ interface ScoredCandidate {
   member_id: string;
   joined_at: string | null;
   score: ScoreBreakdown;
+  /** This slot's service instant + any other commitments the member carries. */
+  slotTime: number;
+  committedTimes: number[];
+}
+
+export interface AutoFillOptions {
+  /**
+   * HARD rest window in days. When > 0, a candidate is skipped for a slot whose
+   * service date sits fewer than this many days from another assignment the
+   * member holds — either an existing commitment (`committed_times`) or one made
+   * earlier in THIS run. Mirrors conflict rule 11. Default 0 → no gate, so the
+   * pass is byte-identical to the original behaviour.
+   */
+  minRestDays?: number;
 }
 
 /**
  * Fill the given slots in order. Slots are processed as provided, so the
  * caller controls priority (e.g. chronological, or most-constrained-first).
  */
-export function autoFill(slots: AutoFillSlot[]): AutoFillResult {
+export function autoFill(slots: AutoFillSlot[], options: AutoFillOptions = {}): AutoFillResult {
   const assignments: ProposedAssignment[] = [];
   const unfilled: UnfilledSlot[] = [];
   const assignedInService = new Map<string, Set<string>>();
+  const minRestDays = options.minRestDays ?? 0;
+  // member_id → epoch-ms of every service they've been assigned THIS run; the
+  // rest-window gate checks new picks against it so back-to-back picks across
+  // services also respect the window.
+  const runTimes = new Map<string, number[]>();
 
   for (const slot of slots) {
     let taken = assignedInService.get(slot.service_id);
@@ -103,7 +131,13 @@ export function autoFill(slots: AutoFillSlot[]): AutoFillResult {
     for (const c of slot.candidates) {
       const score = scoreCandidate(c.inputs);
       if (score === null) continue; // availability hard gate
-      scored.push({ member_id: c.member_id, joined_at: c.joined_at, score });
+      scored.push({
+        member_id: c.member_id,
+        joined_at: c.joined_at,
+        score,
+        slotTime: c.inputs.slot.service_starts_at.getTime(),
+        committedTimes: c.committed_times ?? [],
+      });
     }
     scored.sort(compareCandidates);
 
@@ -111,6 +145,9 @@ export function autoFill(slots: AutoFillSlot[]): AutoFillResult {
     for (let i = 0; i < scored.length && filled < slot.quantity; i++) {
       const cand = scored[i];
       if (taken.has(cand.member_id)) continue; // no double-book in this service
+      // Rest-window hard gate (off when minRestDays <= 0).
+      const others = [...cand.committedTimes, ...(runTimes.get(cand.member_id) ?? [])];
+      if (violatesRestWindow(cand.slotTime, others, minRestDays)) continue;
       assignments.push({
         service_id: slot.service_id,
         role_id: slot.role_id,
@@ -119,6 +156,9 @@ export function autoFill(slots: AutoFillSlot[]): AutoFillResult {
         score: cand.score,
       });
       taken.add(cand.member_id);
+      const rt = runTimes.get(cand.member_id);
+      if (rt) rt.push(cand.slotTime);
+      else runTimes.set(cand.member_id, [cand.slotTime]);
       filled += 1;
     }
 

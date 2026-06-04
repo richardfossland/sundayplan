@@ -409,7 +409,13 @@ function candOn(
   member_id: string,
   skill: SkillLevel,
   dateIso: string,
-  opts: { unavailableOn?: string; prior?: number; pinned?: boolean; need?: SkillLevel } = {},
+  opts: {
+    unavailableOn?: string;
+    prior?: number;
+    pinned?: boolean;
+    need?: SkillLevel;
+    committedOn?: string[];
+  } = {},
 ): AutoFillCandidate {
   const base = cand(member_id, skill, {
     unavailableOn: opts.unavailableOn,
@@ -421,6 +427,64 @@ function candOn(
   const date = new Date(`${dateIso}T12:00:00Z`);
   return {
     ...base,
+    committed_times: (opts.committedOn ?? []).map((d) => new Date(`${d}T12:00:00Z`).getTime()),
     inputs: { ...base.inputs, slot: { ...base.inputs.slot, service_starts_at: date } },
   };
 }
+
+// ── Rest-window awareness (conflict rule 11) ─────────────────────────────────
+describe("balancedAutoFill — minRestDays gate", () => {
+  it("default (no minRestDays) leaves behaviour unchanged", () => {
+    // Two adjacent-day slots; one lone candidate would take both.
+    const slots = [
+      slot("s1", "r1", 1, [candOn("a", "lead", "2026-09-13")]),
+      slot("s2", "r1", 1, [candOn("a", "lead", "2026-09-14")]),
+    ];
+    const res = balancedAutoFill(slots);
+    expect(res.assignments.map((x) => `${x.service_id}:${x.member_id}`).sort()).toEqual(["s1:a", "s2:a"]);
+  });
+
+  it("greedy fill respects the rest window — second slot goes to a fresh peer", () => {
+    const slots = [
+      slot("s1", "r1", 1, [candOn("a", "lead", "2026-09-13")]),
+      // s2 two days later; 'a' too soon (window 6) → 'b' fills it.
+      slot("s2", "r1", 1, [candOn("a", "lead", "2026-09-15"), candOn("b", "lead", "2026-09-15")]),
+    ];
+    const res = balancedAutoFill(slots, { minRestDays: 6 });
+    const byService = Object.fromEntries(res.assignments.map((x) => [x.service_id, x.member_id]));
+    expect(byService).toEqual({ s1: "a", s2: "b" });
+  });
+
+  it("a flattening move never creates a rest-window violation", () => {
+    // 'a' is the eager top scorer everywhere; 'b' is an equally-scored idle peer
+    // BUT 'b' already has a committed service on 2026-09-12, one day before s2.
+    // Without the gate the balancer would move s2 from a→b to flatten load; with
+    // a 6-day window that move is forbidden, so 'b' is not pulled onto s2.
+    const slots = [
+      slot("s1", "r1", 1, [candOn("a", "lead", "2026-09-06")]),
+      slot("s2", "r1", 1, [
+        candOn("a", "lead", "2026-09-13"),
+        candOn("b", "lead", "2026-09-13", { committedOn: ["2026-09-12"] }),
+      ]),
+    ];
+    const res = balancedAutoFill(slots, { minRestDays: 6 });
+    // s2 must stay with 'a' (moving to 'b' would breach 'b's rest window).
+    const s2 = res.assignments.find((x) => x.service_id === "s2");
+    expect(s2?.member_id).toBe("a");
+    // And the result must contain no rest-window-violating swap.
+    for (const sw of res.fairness.swaps) {
+      expect(sw.to_member_id).not.toBe("b");
+    }
+  });
+
+  it("is deterministic with the gate engaged", () => {
+    const slots = () => [
+      slot("s1", "r1", 1, [candOn("a", "lead", "2026-09-13")]),
+      slot("s2", "r1", 1, [candOn("a", "lead", "2026-09-15"), candOn("b", "lead", "2026-09-15")]),
+    ];
+    const a = balancedAutoFill(slots(), { minRestDays: 6 });
+    const b = balancedAutoFill(slots(), { minRestDays: 6 });
+    expect(a.assignments).toEqual(b.assignments);
+    expect(a.fairness.swaps).toEqual(b.fairness.swaps);
+  });
+});

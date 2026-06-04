@@ -22,6 +22,15 @@
  *   8 consecutive_sundays    (soft)  — too many Sundays in a row
  *   9 key_person_unavailable (soft)  — every lead for a required role is away
  *  10 credential_gap         (hard)  — member lacks a credential the role requires
+ *  11 min_rest_window        (hard)  — assigned again before min_rest_days elapsed
+ *
+ * Rule 11 is the HARD, configurable counterpart to the soft consecutive-Sundays
+ * heuristic: it forbids assigning a volunteer to a service when fewer than
+ * `config.min_rest_days` days separate it from their nearest OTHER assignment
+ * (in either direction). It is OFF by default (`min_rest_days: 0`), so it never
+ * fires — and never changes existing behaviour — until a church opts in. Unlike
+ * rule 8 it counts every assignment (not only Sundays) and across services, so a
+ * 6-day window also forbids serving Sat + the next Fri, or twice the same day.
  *
  * Rule 5 keys off an opaque `household_id` grouping label on the member; rule 9
  * off a `keyPersons` list (member is a designated lead for a role) — both
@@ -54,7 +63,8 @@ export type ConflictRule =
   | "unfilled_near_deadline"
   | "consecutive_sundays"
   | "key_person_unavailable"
-  | "credential_gap";
+  | "credential_gap"
+  | "min_rest_window";
 
 export interface Conflict {
   rule: ConflictRule;
@@ -111,11 +121,18 @@ export interface ConflictConfig {
   unfilled_warn_days: number;
   /** Warn if a member serves more than this many consecutive Sundays. */
   max_consecutive_sundays: number;
+  /**
+   * HARD rest window: forbid assigning a member again when fewer than this many
+   * days separate two of their assignments. `0` (the default) disables the rule
+   * entirely — existing behaviour is unchanged until a church opts in.
+   */
+  min_rest_days: number;
 }
 
 export const DEFAULT_CONFLICT_CONFIG: ConflictConfig = {
   unfilled_warn_days: 7,
   max_consecutive_sundays: 3,
+  min_rest_days: 0,
 };
 
 export interface ConflictContext {
@@ -159,6 +176,7 @@ export function detectConflicts(ctx: ConflictContext): Conflict[] {
     ...ruleConsecutiveSundays(ctx, serviceById, cfg),
     ...ruleKeyPersonUnavailable(ctx, serviceById, memberById),
     ...ruleCredentialGap(ctx, memberById, now),
+    ...ruleMinRestWindow(ctx, serviceById, cfg),
   ];
 }
 
@@ -476,6 +494,82 @@ function ruleCredentialGap(
     });
   }
   return out;
+}
+
+// ── Rule 11: hard minimum rest window between assignments (hard) ─────────────
+function ruleMinRestWindow(
+  ctx: ConflictContext,
+  serviceById: Map<string, ServiceInfo>,
+  cfg: ConflictConfig,
+): Conflict[] {
+  if (cfg.min_rest_days <= 0) return []; // disabled → no behaviour change.
+
+  // member → list of { service_id, time } they're assigned to (one per service;
+  // two roles in the SAME service are not a rest-window violation against each
+  // other — that is double_booking's job, and the gap would be 0 spuriously).
+  const byMember = new Map<string, Map<string, number>>();
+  for (const a of ctx.assignments) {
+    const service = serviceById.get(a.service_id);
+    if (!service) continue;
+    let svcs = byMember.get(a.member_id);
+    if (!svcs) byMember.set(a.member_id, (svcs = new Map()));
+    svcs.set(a.service_id, service.starts_at.getTime());
+  }
+
+  const out: Conflict[] = [];
+  for (const [member_id, svcs] of byMember) {
+    // Sort the member's distinct services chronologically (stable on ties by id)
+    // and flag the LATER service of any adjacent pair closer than the window.
+    const ordered = [...svcs.entries()].sort(
+      (a, b) => a[1] - b[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0),
+    );
+    for (let i = 1; i < ordered.length; i++) {
+      const prevT = ordered[i - 1][1];
+      const [curId, curT] = ordered[i];
+      const gapDays = (curT - prevT) / MS_PER_DAY;
+      if (gapDays < cfg.min_rest_days) {
+        out.push({
+          rule: "min_rest_window",
+          severity: "hard",
+          member_id,
+          service_id: curId,
+          message:
+            `Only ${formatGap(gapDays)} since serving on ${isoDate(new Date(prevT))} ` +
+            `— the rest window is ${cfg.min_rest_days} day(s)`,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+/** Human-friendly gap, e.g. "0 days", "3 days", "1.5 days". */
+function formatGap(gapDays: number): string {
+  const rounded = Math.round(gapDays * 10) / 10;
+  const n = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+  return `${n} day${rounded === 1 ? "" : "s"}`;
+}
+
+/**
+ * Shared, pure rest-window predicate the auto-fill orchestrator reuses so its
+ * gate and rule 11 agree exactly. Returns true iff placing an assignment on
+ * `candidateTime` would sit fewer than `minRestDays` from ANY of the member's
+ * `otherTimes` (existing or already-proposed-this-run commitments). With
+ * `minRestDays <= 0` it is always false (the rule is off). An exact-same-instant
+ * match (the same service) is excluded — that is double-booking, not a rest gap.
+ */
+export function violatesRestWindow(
+  candidateTime: number,
+  otherTimes: number[],
+  minRestDays: number,
+): boolean {
+  if (minRestDays <= 0) return false;
+  for (const t of otherTimes) {
+    if (t === candidateTime) continue; // same service instant → not a rest gap
+    const gapDays = Math.abs(candidateTime - t) / MS_PER_DAY;
+    if (gapDays < minRestDays) return true;
+  }
+  return false;
 }
 
 /** Longest run of Sundays spaced exactly 7 days apart. */

@@ -48,6 +48,7 @@
 
 import type { ScoreBreakdown } from "@sundayplan/shared";
 import { scoreCandidate } from "./scoring";
+import { violatesRestWindow } from "./conflicts";
 import type { AutoFillCandidate, AutoFillResult, AutoFillSlot, ProposedAssignment, UnfilledSlot } from "./autofill";
 
 /** Default acceptance epsilon: a move may cost at most this much total score. */
@@ -67,6 +68,14 @@ export interface BalancedAutoFillOptions {
    * pathological inputs. Default 1000.
    */
   maxIterations?: number;
+  /**
+   * HARD rest window in days (conflict rule 11). When > 0, neither the initial
+   * greedy fill nor any flattening move may place a member on a service that
+   * sits fewer than this many days from another assignment they hold — an
+   * existing commitment (`committed_times`) or one made elsewhere in this run.
+   * Default 0 → no gate, behaviour unchanged.
+   */
+  minRestDays?: number;
 }
 
 /** Why a balancing move was applied — surfaced so a planner can audit it. */
@@ -133,18 +142,24 @@ interface ScoredCand {
   joined_at: string | null;
   score: ScoreBreakdown;
   prior: number;
+  /** Other commitments (epoch-ms) this member holds, for the rest-window gate. */
+  committedTimes: number[];
 }
 
 interface WorkSlot {
   service_id: string;
   role_id: string;
   quantity: number;
+  /** This slot's service instant (epoch-ms) — drives the rest-window gate. */
+  serviceTime: number;
   /** Eligible (scored, available, not credential-gated) candidates, ranked. */
   eligible: ScoredCand[];
   /** member_id → score breakdown, for O(1) lookup during moves. */
   scoreOf: Map<string, ScoreBreakdown>;
   /** member_id → cumulative prior, for the load model. */
   priorOf: Map<string, number>;
+  /** member_id → other-commitment times, for the rest-window gate during moves. */
+  committedOf: Map<string, number[]>;
   /** member_ids pinned/locked into this slot — never moved off, count to load. */
   pinned: string[];
   /** Currently-chosen member_ids for the auto-fillable portion (non-pinned). */
@@ -162,6 +177,9 @@ function priorOf(c: AutoFillCandidate): number {
 }
 function isPinned(c: AutoFillCandidate): boolean {
   return c.pinned === true;
+}
+function committedTimesOf(c: AutoFillCandidate): number[] {
+  return Array.isArray(c.committed_times) ? c.committed_times : [];
 }
 
 /** Deterministic candidate ranking — mirrors autofill.ts exactly. */
@@ -190,10 +208,11 @@ export function balancedAutoFill(
 ): BalancedAutoFillResult {
   const epsilon = options.epsilon ?? DEFAULT_BALANCE_EPSILON;
   const maxIterations = options.maxIterations ?? 1000;
+  const minRestDays = options.minRestDays ?? 0;
 
   // ── 1. Greedy baseline (the existing, trusted pass) ─────────────────────────
   // We re-derive its result *inside* a working model so we can mutate from it.
-  const work = buildWorkModel(slots);
+  const work = buildWorkModel(slots, minRestDays);
 
   // Member → set of services they're assigned in (double-book guard) over the
   // whole plan (pinned + chosen). Built fresh from the working model.
@@ -218,7 +237,7 @@ export function balancedAutoFill(
   while (improved && iterations < maxIterations) {
     improved = false;
     iterations++;
-    const move = bestImprovingMove(work, servicesOf, load, eligibleUniverse, epsilon);
+    const move = bestImprovingMove(work, servicesOf, load, eligibleUniverse, epsilon, minRestDays);
     if (!move) break;
     applyMove(servicesOf, load, move);
     swaps.push({
@@ -260,11 +279,14 @@ export function balancedAutoFill(
 
 // ── Working-model construction ────────────────────────────────────────────────
 
-function buildWorkModel(slots: AutoFillSlot[]): WorkSlot[] {
+function buildWorkModel(slots: AutoFillSlot[], minRestDays: number): WorkSlot[] {
   // First, mirror the greedy pass's per-service double-book bookkeeping so the
   // baseline `chosen` matches `autoFill` exactly (including slot order).
   const assignedInService = new Map<string, Set<string>>();
   const work: WorkSlot[] = [];
+  // member_id → epoch-ms of every service they hold this run so far (pinned +
+  // chosen) — the rest-window gate checks new greedy picks against it.
+  const runTimes = new Map<string, number[]>();
 
   for (const slot of slots) {
     let taken = assignedInService.get(slot.service_id);
@@ -273,10 +295,13 @@ function buildWorkModel(slots: AutoFillSlot[]): WorkSlot[] {
     const eligible: ScoredCand[] = [];
     const scoreOf = new Map<string, ScoreBreakdown>();
     const priorMap = new Map<string, number>();
+    const committedMap = new Map<string, number[]>();
     const pinned: string[] = [];
+    const serviceTime = slot.candidates[0]?.inputs.slot.service_starts_at.getTime() ?? 0;
 
     for (const c of slot.candidates) {
       const score = scoreCandidate(c.inputs);
+      committedMap.set(c.member_id, committedTimesOf(c));
       if (isPinned(c)) {
         // A pinned member occupies the slot regardless of score; they still
         // count toward double-book and load. (Pinned implies the planner placed
@@ -284,10 +309,17 @@ function buildWorkModel(slots: AutoFillSlot[]): WorkSlot[] {
         pinned.push(c.member_id);
         priorMap.set(c.member_id, priorOf(c));
         taken.add(c.member_id);
+        recordRunTime(runTimes, c.member_id, serviceTime);
         continue;
       }
       if (score === null) continue; // availability / hard gate
-      eligible.push({ member_id: c.member_id, joined_at: c.joined_at, score, prior: priorOf(c) });
+      eligible.push({
+        member_id: c.member_id,
+        joined_at: c.joined_at,
+        score,
+        prior: priorOf(c),
+        committedTimes: committedTimesOf(c),
+      });
       scoreOf.set(c.member_id, score);
       priorMap.set(c.member_id, priorOf(c));
     }
@@ -299,22 +331,34 @@ function buildWorkModel(slots: AutoFillSlot[]): WorkSlot[] {
     for (let i = 0; i < eligible.length && chosen.length < capacity; i++) {
       const m = eligible[i].member_id;
       if (taken.has(m)) continue; // no double-book in this service
+      // Rest-window hard gate against existing + this-run commitments.
+      const others = [...eligible[i].committedTimes, ...(runTimes.get(m) ?? [])];
+      if (violatesRestWindow(serviceTime, others, minRestDays)) continue;
       chosen.push(m);
       taken.add(m);
+      recordRunTime(runTimes, m, serviceTime);
     }
 
     work.push({
       service_id: slot.service_id,
       role_id: slot.role_id,
       quantity: slot.quantity,
+      serviceTime,
       eligible,
       scoreOf,
       priorOf: priorMap,
+      committedOf: committedMap,
       pinned,
       chosen,
     });
   }
   return work;
+}
+
+function recordRunTime(runTimes: Map<string, number[]>, member: string, t: number): void {
+  const arr = runTimes.get(member);
+  if (arr) arr.push(t);
+  else runTimes.set(member, [t]);
 }
 
 /** member_id → set of service_ids they currently occupy (pinned + chosen). */
@@ -387,6 +431,7 @@ function bestImprovingMove(
   load: Map<string, number>,
   universe: string[],
   epsilon: number,
+  minRestDays: number,
 ): CandidateMove | null {
   const gapBefore = loadGap(universe, load);
   const ss2Before = sumSquares(universe, load);
@@ -404,6 +449,16 @@ function bestImprovingMove(
         if (slot.chosen.includes(inM) || slot.pinned.includes(inM)) continue; // already in slot
         // Double-book guard: `in` must not already serve this service elsewhere.
         if (servicesOf.get(inM)?.has(slot.service_id)) continue;
+        // Rest-window guard: moving `in` onto this slot must not put them within
+        // the window of another service they hold (existing commitment or this
+        // run). Mirrors conflict rule 11 so the orchestrator never proposes a
+        // rest-window-violating assignment.
+        if (
+          minRestDays > 0 &&
+          violatesRestWindow(slot.serviceTime, otherTimesOf(work, inM, slot), minRestDays)
+        ) {
+          continue;
+        }
         // `in` must be genuinely eligible (it is — drawn from slot.eligible —
         // which is exactly the scored/available/non-gated set). A move never
         // lands a slot on an ineligible candidate.
@@ -447,6 +502,25 @@ function bestImprovingMove(
     }
   }
   return best;
+}
+
+/**
+ * Every OTHER service-instant `member` holds across the run (pinned + chosen on
+ * any slot except `exclude`) plus their external committed times. The rest-window
+ * gate measures a prospective placement against this set. The excluded slot is
+ * the one being moved onto, so we don't compare a slot against itself.
+ */
+function otherTimesOf(work: WorkSlot[], member: string, exclude: WorkSlot): number[] {
+  const times: number[] = [];
+  const committed = exclude.committedOf.get(member);
+  if (committed) times.push(...committed);
+  for (const slot of work) {
+    if (slot === exclude) continue;
+    if (slot.pinned.includes(member) || slot.chosen.includes(member)) {
+      times.push(slot.serviceTime);
+    }
+  }
+  return times;
 }
 
 /** Lexicographic comparison with a final stable id tiebreak. */

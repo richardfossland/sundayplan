@@ -161,3 +161,89 @@ describe("autoFill — double-booking", () => {
     expect(res.assignments.map((x) => `${x.service_id}:${x.member_id}`)).toEqual(["s1:a", "s2:a"]);
   });
 });
+
+// ── Rest-window awareness (conflict rule 11) ─────────────────────────────────
+describe("autoFill — minRestDays gate", () => {
+  const DAY = 86_400_000;
+  const D0 = new Date("2026-09-13T12:00:00Z"); // Sunday
+
+  /** A candidate whose slot date + external committed dates are controllable. */
+  function restCand(
+    member_id: string,
+    slotDate: Date,
+    skill: SkillLevel,
+    committed: Date[] = [],
+  ): AutoFillCandidate {
+    const i = inputs(skill, "lead");
+    return {
+      member_id,
+      joined_at: "2020-01-01",
+      committed_times: committed.map((d) => d.getTime()),
+      inputs: {
+        candidate: { ...i.candidate, member_id, availability: [] },
+        slot: { service_starts_at: slotDate, role_skill_required: "lead" },
+      },
+    };
+  }
+
+  it("default (no minRestDays) is unchanged — back-to-back picks allowed", () => {
+    const d1 = new Date(D0.getTime() + DAY); // next day
+    const res = autoFill([
+      slot("s1", "r1", 1, [restCand("a", D0, "lead")]),
+      slot("s2", "r1", 1, [restCand("a", d1, "lead")]),
+    ]);
+    expect(res.assignments.map((x) => `${x.service_id}:${x.member_id}`)).toEqual(["s1:a", "s2:a"]);
+  });
+
+  it("skips a candidate within the window of a this-run pick", () => {
+    const d1 = new Date(D0.getTime() + 2 * DAY); // 2 days later, window 6
+    const res = autoFill(
+      [
+        slot("s1", "r1", 1, [restCand("a", D0, "lead")]),
+        // s2: 'a' is too soon; 'b' is fresh → 'b' wins.
+        slot("s2", "r1", 1, [restCand("a", d1, "lead"), restCand("b", d1, "lead")]),
+      ],
+      { minRestDays: 6 },
+    );
+    const byService = Object.fromEntries(res.assignments.map((x) => [x.service_id, x.member_id]));
+    expect(byService).toEqual({ s1: "a", s2: "b" });
+  });
+
+  it("skips a candidate within the window of an EXISTING commitment", () => {
+    const committed = new Date(D0.getTime() - 3 * DAY); // served 3 days before
+    const res = autoFill(
+      [slot("s1", "r1", 1, [restCand("a", D0, "lead", [committed]), restCand("b", D0, "lead")])],
+      { minRestDays: 6 },
+    );
+    // 'a' (#1 by joined_at/id tie, both lead) is rest-blocked → 'b' fills it.
+    expect(res.assignments).toHaveLength(1);
+    expect(res.assignments[0].member_id).toBe("b");
+  });
+
+  it("allows a pick exactly at the window boundary (gap == minRestDays)", () => {
+    const d1 = new Date(D0.getTime() + 6 * DAY); // exactly 6 days later
+    const res = autoFill(
+      [
+        slot("s1", "r1", 1, [restCand("a", D0, "lead")]),
+        slot("s2", "r1", 1, [restCand("a", d1, "lead")]),
+      ],
+      { minRestDays: 6 },
+    );
+    expect(res.assignments.map((x) => x.service_id)).toEqual(["s1", "s2"]);
+  });
+
+  it("leaves a slot unfilled when every candidate is rest-blocked", () => {
+    const d1 = new Date(D0.getTime() + DAY);
+    const res = autoFill(
+      [
+        slot("s1", "r1", 1, [restCand("a", D0, "lead")]),
+        slot("s2", "r1", 1, [restCand("a", d1, "lead")]),
+      ],
+      { minRestDays: 6 },
+    );
+    expect(res.assignments.map((x) => x.service_id)).toEqual(["s1"]);
+    expect(res.unfilled).toEqual([
+      { service_id: "s2", role_id: "r1", needed: 1, filled: 0, reason: "insufficient_candidates" },
+    ]);
+  });
+});

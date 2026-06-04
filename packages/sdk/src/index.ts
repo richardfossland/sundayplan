@@ -22,5 +22,6 @@ export * from "./serviceplan-fetcher";
 export * from "./channels";
 export * from "./reports";
 export * from "./coverage";
+export * from "./analytics";
 export * from "./import";
 export * from "./api";

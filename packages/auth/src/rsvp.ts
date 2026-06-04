@@ -108,3 +108,60 @@ export function applyResponse(
     outcome: action === "accept" ? "accepted" : "declined",
   };
 }
+
+/**
+ * Minimal Supabase client surface for the single-use consume: a conditional
+ * UPDATE on `magic_link` that only matches an *unclaimed* row, returning the
+ * rows it actually touched. Both the supabase-js builder (Edge Function) and a
+ * test double satisfy this.
+ */
+export interface SingleUseConsumeClient {
+  from(table: "magic_link"): {
+    update(values: { used_at: string }): {
+      eq(col: "token_hash", value: string): {
+        is(col: "used_at", value: null): {
+          select(cols: "id"): PromiseLike<{
+            data: Array<{ id: string }> | null;
+            error: { message: string } | null;
+          }>;
+        };
+      };
+    };
+  };
+}
+
+/** Outcome of trying to atomically claim a single-use magic link. */
+export type ConsumeResult =
+  | { ok: true }
+  | { ok: false; reason: "already_used" }
+  | { ok: false; reason: "consume_failed"; detail: string };
+
+/**
+ * Atomically consume a single-use magic link, closing the TOCTOU window a
+ * read-check-then-write opens.
+ *
+ * The condition `used_at IS NULL` is evaluated *inside* the UPDATE, so two
+ * concurrent callers race in the database, not in application code: exactly one
+ * UPDATE matches the row and gets it back via `.select()`; the loser matches
+ * zero rows and learns the link was already claimed. This mirrors the web
+ * server action in apps/web/app/r/[token]/actions.ts.
+ *
+ * Returns `already_used` when no unclaimed row matched (i.e. a concurrent
+ * winner, an expired-but-present row already consumed, or an unknown token).
+ */
+export async function consumeSingleUseLink(
+  db: SingleUseConsumeClient,
+  tokenHash: string,
+  now: Date = new Date(),
+): Promise<ConsumeResult> {
+  const { data, error } = await db
+    .from("magic_link")
+    .update({ used_at: now.toISOString() })
+    .eq("token_hash", tokenHash)
+    .is("used_at", null)
+    .select("id");
+
+  if (error) return { ok: false, reason: "consume_failed", detail: error.message };
+  if (!data || data.length === 0) return { ok: false, reason: "already_used" };
+  return { ok: true };
+}

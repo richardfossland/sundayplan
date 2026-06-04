@@ -7,6 +7,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // Direct .ts import (Deno needs the extension; the package barrel uses
 // extensionless re-exports that only the bundler/Node side resolves).
 import { tokenHash, verifyMagicLink } from "../../../packages/auth/src/magic-link.ts";
+import { consumeSingleUseLink } from "../../../packages/auth/src/rsvp.ts";
 
 const MAGICLINK_SECRET = Deno.env.get("MAGICLINK_SECRET") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -48,13 +49,25 @@ Deno.serve(async (req) => {
   // Single-use: the row must exist, be unused, and not expired.
   const { data: link } = await db
     .from("magic_link")
-    .select("id, used_at, expires_at")
+    .select("used_at, expires_at")
     .eq("token_hash", hash)
     .maybeSingle();
 
   if (!link) return json({ error: "unknown_token" }, 401);
   if (link.used_at) return json({ error: "already_used" }, 409);
   if (new Date(link.expires_at).getTime() < Date.now()) return json({ error: "expired" }, 401);
+
+  // Claim the single-use link ATOMICALLY before touching the assignment. The
+  // condition `used_at IS NULL` is evaluated inside the UPDATE, so concurrent
+  // POSTs race in the database: exactly one wins and proceeds to the RSVP
+  // write; the loser is rejected here rather than both flipping the status
+  // (last-writer-wins). Closes the read-check-write TOCTOU; mirrors the web
+  // server action in apps/web/app/r/[token]/actions.ts.
+  const consumed = await consumeSingleUseLink(db, hash);
+  if (!consumed.ok) {
+    if (consumed.reason === "already_used") return json({ error: "already_used" }, 409);
+    return json({ error: "consume_failed", detail: consumed.detail }, 500);
+  }
 
   const status = action === "accept" ? "accepted" : "declined";
   const { error: updateError } = await db
@@ -63,8 +76,6 @@ Deno.serve(async (req) => {
     .eq("id", claims.assignment_id)
     .eq("member_id", claims.member_id);
   if (updateError) return json({ error: "update_failed", detail: updateError.message }, 500);
-
-  await db.from("magic_link").update({ used_at: new Date().toISOString() }).eq("id", link.id);
 
   return json({ ok: true, status });
 });

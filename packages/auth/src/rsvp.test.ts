@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyResponse,
   buildResponseLinks,
+  consumeSingleUseLink,
   isRespondable,
   parseAction,
   RSVP_ACTIONS,
@@ -140,5 +141,93 @@ describe("applyResponse", () => {
       changed: false,
       outcome: "closed",
     });
+  });
+});
+
+describe("consumeSingleUseLink (atomic single-use, TOCTOU race)", () => {
+  // A test double for a single magic_link row whose single-use claim is decided
+  // INSIDE the conditional UPDATE: `is("used_at", null)` only matches while the
+  // row is unclaimed, so two callers race against the same row exactly as they
+  // would in Postgres. Each `.select("id")` returns the row only if this call
+  // was the one that flipped used_at from null.
+  function fakeStore(initial: { id: string; used_at: string | null }) {
+    const row = { ...initial };
+    const client = {
+      from() {
+        return {
+          update(values: { used_at: string }) {
+            return {
+              eq() {
+                return {
+                  is(_col: "used_at", _value: null) {
+                    return {
+                      select() {
+                        // Conditional match: only an unclaimed row is touched.
+                        if (row.used_at === null) {
+                          row.used_at = values.used_at;
+                          return Promise.resolve({ data: [{ id: row.id }], error: null });
+                        }
+                        return Promise.resolve({ data: [], error: null });
+                      },
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+    return { client, row };
+  }
+
+  it("only ONE of two concurrent claims on the same single-use link succeeds", async () => {
+    const { client } = fakeStore({ id: "ml1", used_at: null });
+    // Both POSTs fire before either has finished (Promise.all = concurrent).
+    const [a, b] = await Promise.all([
+      consumeSingleUseLink(client, "hash"),
+      consumeSingleUseLink(client, "hash"),
+    ]);
+    const wins = [a, b].filter((r) => r.ok).length;
+    const losses = [a, b].filter((r) => !r.ok && r.reason === "already_used").length;
+    expect(wins).toBe(1);
+    expect(losses).toBe(1);
+  });
+
+  it("reports already_used for an already-consumed link", async () => {
+    const { client } = fakeStore({ id: "ml1", used_at: "2026-06-01T00:00:00.000Z" });
+    const res = await consumeSingleUseLink(client, "hash");
+    expect(res).toEqual({ ok: false, reason: "already_used" });
+  });
+
+  it("succeeds for a fresh unclaimed link", async () => {
+    const { client, row } = fakeStore({ id: "ml1", used_at: null });
+    const res = await consumeSingleUseLink(client, "hash", new Date("2026-06-04T10:00:00Z"));
+    expect(res).toEqual({ ok: true });
+    expect(row.used_at).toBe("2026-06-04T10:00:00.000Z");
+  });
+
+  it("surfaces a DB error as consume_failed without claiming", async () => {
+    const client = {
+      from() {
+        return {
+          update() {
+            return {
+              eq() {
+                return {
+                  is() {
+                    return {
+                      select: () => Promise.resolve({ data: null, error: { message: "boom" } }),
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+    const res = await consumeSingleUseLink(client, "hash");
+    expect(res).toEqual({ ok: false, reason: "consume_failed", detail: "boom" });
   });
 });

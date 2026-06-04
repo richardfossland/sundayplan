@@ -82,8 +82,8 @@ export async function autoFillSchedule(): Promise<void> {
   const churchId = await getCurrentChurchId();
   if (!churchId) return;
 
-  const slots = await buildAutoFillSlots();
-  const { assignments } = autoFill(slots);
+  const { slots, minRestDays } = await buildAutoFillSlots();
+  const { assignments } = autoFill(slots, { minRestDays });
   if (assignments.length === 0) {
     revalidatePath("/schedule");
     return;
@@ -117,8 +117,8 @@ export async function autoFillScheduleBalanced(): Promise<{ fairness: FairnessSu
   const churchId = await getCurrentChurchId();
   if (!churchId) return null;
 
-  const slots = await buildAutoFillSlots(new Date(), { withWindowPriors: true });
-  const { assignments, fairness } = balancedAutoFill(slots);
+  const { slots, minRestDays } = await buildAutoFillSlots(new Date(), { withWindowPriors: true });
+  const { assignments, fairness } = balancedAutoFill(slots, { minRestDays });
   if (assignments.length === 0) {
     revalidatePath("/schedule");
     return { fairness };

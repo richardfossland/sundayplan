@@ -30,6 +30,7 @@ const SCHEMA: Record<string, Set<string>> = {
   team_membership: new Set(["member_id", "role_id", "team_id", "skill_level", "is_key_person"]),
   church_settings: new Set([
     "church_id", "default_max_assignments_per_month", "unfilled_warn_days", "max_consecutive_sundays",
+    "min_rest_days",
   ]),
 };
 

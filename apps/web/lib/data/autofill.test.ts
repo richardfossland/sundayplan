@@ -23,9 +23,18 @@ let DATA: Record<string, Rows> = {};
 // `{ data, error }`.
 function makeBuilder(table: string) {
   const result = { data: DATA[table] ?? [], error: null };
+  // `.maybeSingle()` resolves to the first row (or null) — used for
+  // church_settings (a single-row-per-church table).
+  const singleResult = {
+    data: (DATA[table] ?? [])[0] ?? null,
+    error: null,
+  };
   const thenable = {
     order() {
       return thenable;
+    },
+    maybeSingle() {
+      return Promise.resolve(singleResult);
     },
     then(resolve: (v: typeof result) => unknown) {
       return Promise.resolve(result).then(resolve);
@@ -83,7 +92,7 @@ beforeEach(() => {
 
 describe("buildAutoFillSlots — window-prior wiring", () => {
   it("attaches window_serves_prior reflecting active assignments when opted in", async () => {
-    const slots = await buildAutoFillSlots(NOW, { withWindowPriors: true });
+    const { slots } = await buildAutoFillSlots(NOW, { withWindowPriors: true });
     // svc1 is fully filled (sound→ava active) so only svc2 produces a slot.
     const svc2 = slots.find((s) => s.service_id === "svc2");
     expect(svc2).toBeDefined();
@@ -94,7 +103,7 @@ describe("buildAutoFillSlots — window-prior wiring", () => {
   });
 
   it("attaches NO prior by default (default-safe, original behaviour)", async () => {
-    const slots = await buildAutoFillSlots(NOW);
+    const { slots } = await buildAutoFillSlots(NOW);
     const svc2 = slots.find((s) => s.service_id === "svc2")!;
     for (const c of svc2.candidates) {
       expect(c.window_serves_prior).toBeUndefined();
@@ -110,9 +119,35 @@ describe("buildAutoFillSlots — window-prior wiring", () => {
       member_id: "ben",
       status: "removed",
     });
-    const slots = await buildAutoFillSlots(NOW, { withWindowPriors: true });
+    const { slots } = await buildAutoFillSlots(NOW, { withWindowPriors: true });
     const svc2 = slots.find((s) => s.service_id === "svc2")!;
     const ben = svc2.candidates.find((c) => c.member_id === "ben");
     expect(ben?.window_serves_prior).toBe(0);
+  });
+});
+
+describe("buildAutoFillSlots — rest-window wiring", () => {
+  it("returns the church's min_rest_days (0 when unset)", async () => {
+    const { minRestDays } = await buildAutoFillSlots(NOW);
+    expect(minRestDays).toBe(0);
+  });
+
+  it("reads min_rest_days from church_settings when present", async () => {
+    DATA = baseData();
+    DATA.church_settings = [{ min_rest_days: 6 }];
+    const { minRestDays } = await buildAutoFillSlots(NOW);
+    expect(minRestDays).toBe(6);
+  });
+
+  it("attaches committed_times = other active service instants the member holds", async () => {
+    DATA = baseData();
+    const { slots } = await buildAutoFillSlots(NOW);
+    const svc2 = slots.find((s) => s.service_id === "svc2")!;
+    // ava is actively booked on svc1 (2026-12-06) → that instant is committed.
+    const ava = svc2.candidates.find((c) => c.member_id === "ava");
+    expect(ava?.committed_times).toEqual([new Date("2026-12-06T11:00:00.000Z").getTime()]);
+    // ben's only svc1 booking was declined → no committed time.
+    const ben = svc2.candidates.find((c) => c.member_id === "ben");
+    expect(ben?.committed_times).toEqual([]);
   });
 });

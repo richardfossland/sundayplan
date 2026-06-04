@@ -2,7 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { Badge, Card } from "@/components/ui";
-import { loadSwapCandidates, type OpenSwap, type SwapCandidate } from "@/app/(app)/swaps/actions";
+import {
+  loadSwapCandidates,
+  assignCandidate,
+  cancelSwap,
+  type OpenSwap,
+  type SwapCandidate,
+} from "@/app/(app)/swaps/actions";
 import { formatWhenShort } from "@/lib/i18n/date";
 import { translate, type Locale } from "@/lib/i18n/messages";
 
@@ -10,6 +16,14 @@ type CandidateState =
   | { kind: "idle" }
   | { kind: "loading" }
   | { kind: "loaded"; candidates: SwapCandidate[] }
+  | { kind: "error" };
+
+// Terminal outcome of a resolve/cancel action, so the row reflects what happened
+// even before the server-rendered list refreshes it away.
+type ResolveState =
+  | { kind: "idle" }
+  | { kind: "assigned"; name: string }
+  | { kind: "cancelled" }
   | { kind: "error" };
 
 export function SwapQueue({ swaps, locale }: { swaps: OpenSwap[]; locale: Locale }) {
@@ -37,6 +51,7 @@ function SwapRow({ swap, locale }: { swap: OpenSwap; locale: Locale }) {
   const t = (key: string, vars?: Record<string, string | number>) => translate(locale, key, vars);
   const [open, setOpen] = useState(false);
   const [state, setState] = useState<CandidateState>({ kind: "idle" });
+  const [resolve, setResolve] = useState<ResolveState>({ kind: "idle" });
   const [pending, startTransition] = useTransition();
 
   function toggle() {
@@ -52,7 +67,36 @@ function SwapRow({ swap, locale }: { swap: OpenSwap; locale: Locale }) {
     }
   }
 
+  function onAssign(candidate: SwapCandidate) {
+    startTransition(async () => {
+      const r = await assignCandidate(swap.id, candidate.member_id);
+      setResolve(r.ok ? { kind: "assigned", name: candidate.name } : { kind: "error" });
+    });
+  }
+
+  function onCancel() {
+    startTransition(async () => {
+      const r = await cancelSwap(swap.id);
+      setResolve(r.ok ? { kind: "cancelled" } : { kind: "error" });
+    });
+  }
+
+  const done = resolve.kind === "assigned" || resolve.kind === "cancelled";
   const whenLabel = swap.service_starts_at ? formatWhenShort(swap.service_starts_at, locale) : "—";
+
+  // Once acted on, collapse the row to a terminal confirmation. The server list
+  // re-renders without this swap on the next navigation/refresh (revalidatePath).
+  if (done) {
+    return (
+      <Card className="px-5 py-4">
+        <p className="text-sm text-ink-200">
+          {resolve.kind === "assigned"
+            ? t("swaps.resolved.assigned", { name: resolve.name })
+            : t("swaps.resolved.cancelled")}
+        </p>
+      </Card>
+    );
+  }
 
   return (
     <Card>
@@ -80,7 +124,7 @@ function SwapRow({ swap, locale }: { swap: OpenSwap; locale: Locale }) {
 
       {open ? (
         <div className="border-t border-white/[0.06] px-5 py-4">
-          {state.kind === "loading" || pending ? (
+          {state.kind === "loading" ? (
             <p className="text-xs text-ink-500">{t("swaps.loadingCandidates")}</p>
           ) : state.kind === "error" ? (
             <p className="text-xs text-[color:var(--color-danger)]">{t("swaps.candidatesError")}</p>
@@ -103,7 +147,17 @@ function SwapRow({ swap, locale }: { swap: OpenSwap; locale: Locale }) {
                         </span>
                       ) : null}
                     </div>
-                    <Badge tone="gold">{t("swaps.match", { score: c.score })}</Badge>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Badge tone="gold">{t("swaps.match", { score: c.score })}</Badge>
+                      <button
+                        type="button"
+                        onClick={() => onAssign(c)}
+                        disabled={pending}
+                        className="rounded-lg bg-gold-400 px-3 py-1 text-xs font-semibold text-ink-950 transition-opacity hover:opacity-90 disabled:opacity-50"
+                      >
+                        {t("swaps.assign")}
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -111,6 +165,21 @@ function SwapRow({ swap, locale }: { swap: OpenSwap; locale: Locale }) {
           ) : (
             <p className="text-xs text-ink-400">{t("swaps.noCandidates")}</p>
           )}
+
+          {resolve.kind === "error" ? (
+            <p className="mt-3 text-xs text-[color:var(--color-danger)]">{t("swaps.resolveError")}</p>
+          ) : null}
+
+          <div className="mt-4 flex justify-end border-t border-white/[0.06] pt-3">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={pending}
+              className="rounded-lg border border-white/10 px-3 py-1 text-xs font-medium text-ink-300 transition-colors hover:bg-white/[0.04] disabled:opacity-50"
+            >
+              {t("swaps.cancelSwap")}
+            </button>
+          </div>
         </div>
       ) : null}
     </Card>

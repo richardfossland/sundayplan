@@ -54,7 +54,7 @@ export async function findReplacements(
     sb.from("role").select("id, skill_required"),
     sb.from("assignment").select("service_id, role_id, member_id, status"),
     sb.from("member").select(
-      "id, display_name, household, joined_at, target_serves_per_month, max_assignments_per_month, availability(id, member_id, kind, pattern, reason, reason_visibility)",
+      "id, display_name, household, joined_at, target_serves_per_month, availability(id, member_id, kind, pattern, reason, reason_visibility)",
     ),
     sb.from("team_membership").select("member_id, role_id, skill_level, is_key_person"),
     sb.from("church_settings").select("default_max_assignments_per_month, unfilled_warn_days, max_consecutive_sundays"),
@@ -65,7 +65,7 @@ export async function findReplacements(
   interface AsgRow { service_id: string; role_id: string; member_id: string; status: string }
   interface MemberRow {
     id: string; display_name: string; household: string | null; joined_at: string | null;
-    target_serves_per_month: number | null; max_assignments_per_month: number | null;
+    target_serves_per_month: number | null;
     availability: Availability[] | null;
   }
   interface MshipRow { member_id: string; role_id: string; skill_level: SkillLevel; is_key_person: boolean }
@@ -107,7 +107,9 @@ export async function findReplacements(
     id: m.id,
     display_name: m.display_name,
     availability: m.availability ?? [],
-    max_assignments_per_month: m.max_assignments_per_month ?? maxPerMonth,
+    // No per-member override column exists on `member`; the cap comes from the
+    // church-wide setting (mirrors lib/data/schedule.ts + autofill.ts).
+    max_assignments_per_month: maxPerMonth,
     household_id: m.household,
   }));
 

@@ -145,6 +145,11 @@ const en: Catalog = {
   "swaps.candidatesError": "Couldn't load candidates — try again.",
   "swaps.noCandidates": "No trained volunteer is free for this slot right now.",
   "swaps.match": "{score} match",
+  "swaps.assign": "Assign",
+  "swaps.cancelSwap": "Cancel swap",
+  "swaps.resolved.assigned": "Assigned to {name} — they'll get a request to confirm.",
+  "swaps.resolved.cancelled": "Swap cancelled — the slot is still open.",
+  "swaps.resolveError": "Couldn't complete that — the swap may already be handled. Refresh and try again.",
 
   // Common
   "common.church": "Your church",
@@ -906,6 +911,11 @@ const no: Catalog = {
   "swaps.candidatesError": "Kunne ikke laste kandidater — prøv igjen.",
   "swaps.noCandidates": "Ingen opplært frivillig er ledig for denne vakten akkurat nå.",
   "swaps.match": "{score} treff",
+  "swaps.assign": "Sett opp",
+  "swaps.cancelSwap": "Avbryt bytte",
+  "swaps.resolved.assigned": "Satt opp {name} — de får en forespørsel om å bekrefte.",
+  "swaps.resolved.cancelled": "Byttet er avbrutt — vakten er fortsatt åpen.",
+  "swaps.resolveError": "Kunne ikke fullføre — byttet er kanskje allerede håndtert. Last inn på nytt og prøv igjen.",
 
   // Common
   "common.church": "Din menighet",

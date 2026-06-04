@@ -1,7 +1,15 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/data/church";
 import type { SongUsageRow } from "@sundayplan/shared";
-import type { ServeRow, CoverageRow } from "@sundayplan/sdk";
+import type {
+  ServeRow,
+  CoverageRow,
+  ChurnMember,
+  ChurnAssignment,
+  RoleRef,
+  RoleQualification,
+  RoleTarget,
+} from "@sundayplan/sdk";
 
 /**
  * Phase 11 data layer — gather licensing usage rows for the active church.
@@ -254,4 +262,136 @@ export async function getCoverageRows(from: string, to: string): Promise<Coverag
     }
   }
   return rows;
+}
+
+// ── Volunteer health (churn / retention) ──────────────────────────────────────
+
+interface ChurnMemberRow {
+  id: string;
+  display_name: string;
+  joined_at: string | null;
+  status: string;
+}
+interface ChurnAssignmentEmbed {
+  member_id: string;
+  service: { starts_at_utc: string; state: string } | null;
+}
+
+/**
+ * Every member of the active church plus their committed serves — the raw input
+ * for {@link buildChurnReport}. Unlike the licensing/coverage reports this is
+ * NOT date-windowed: churn looks across a member's whole history relative to
+ * `now` (which the SDK engine receives, not this layer). RLS-scoped.
+ *
+ * Returns `null` member status falls back to 'inactive' so it is never counted
+ * as retained; archived services are dropped from the serve history.
+ */
+export async function getChurnInputs(): Promise<{
+  members: ChurnMember[];
+  assignments: ChurnAssignment[];
+}> {
+  const churchId = await getCurrentChurchId();
+  if (!churchId) return { members: [], assignments: [] };
+  const supabase = await createClient();
+
+  const [{ data: memberData, error: memberErr }, { data: asgData, error: asgErr }] =
+    await Promise.all([
+      supabase
+        .from("member")
+        .select("id, display_name, joined_at, status")
+        .eq("church_id", churchId),
+      supabase
+        .from("assignment")
+        .select("member_id, service:service_id(starts_at_utc, state)")
+        .eq("church_id", churchId)
+        .in("status", ACTIVE_STATUSES),
+    ]);
+  if (memberErr) throw memberErr;
+  if (asgErr) throw asgErr;
+
+  const members: ChurnMember[] = ((memberData ?? []) as ChurnMemberRow[]).map((m) => ({
+    memberId: m.id,
+    name: m.display_name,
+    joinedAtLocal: m.joined_at,
+    // member.status is one of active|inactive|archived (DB CHECK); narrow safely.
+    status: m.status === "active" ? "active" : m.status === "archived" ? "archived" : "inactive",
+  }));
+
+  const assignments: ChurnAssignment[] = [];
+  for (const a of (asgData ?? []) as unknown as ChurnAssignmentEmbed[]) {
+    const svc = a.service;
+    if (!svc || svc.state === "archived") continue;
+    assignments.push({ memberId: a.member_id, serviceDateLocal: svc.starts_at_utc });
+  }
+  return { members, assignments };
+}
+
+// ── Role balance (recruiting heatmap) ─────────────────────────────────────────
+
+interface RoleRowDb {
+  id: string;
+  name: string;
+  recruit_target: number | null;
+  team: { name: string } | null;
+}
+interface QualEmbed {
+  role_id: string;
+  member: { status: string } | null;
+}
+
+/**
+ * Per-role recruiting inputs for {@link buildRoleBalanceReport}: the church's
+ * roles (with their optional `recruit_target` + team name), and every
+ * member→role qualification from `team_membership` tagged with whether the
+ * member is currently active. RLS-scoped via the cookie-bound client.
+ *
+ * `role` carries no `church_id`; it is scoped through its `team` (which does),
+ * so we filter teams by church and read roles per team. Qualifications likewise
+ * route through `role`'s team — but `team_membership` lacks `church_id`, so we
+ * constrain it to the church's role ids (PostgREST `.in`).
+ */
+export async function getRoleBalanceInputs(): Promise<{
+  roles: RoleRef[];
+  qualifications: RoleQualification[];
+  targets: RoleTarget[];
+}> {
+  const churchId = await getCurrentChurchId();
+  if (!churchId) return { roles: [], qualifications: [], targets: [] };
+  const supabase = await createClient();
+
+  // Roles via their team (team has church_id; role does not).
+  const { data: roleData, error: roleErr } = await supabase
+    .from("role")
+    .select("id, name, recruit_target, team:team_id!inner(name, church_id)")
+    .eq("team.church_id", churchId);
+  if (roleErr) throw roleErr;
+
+  const roleRows = (roleData ?? []) as unknown as RoleRowDb[];
+  const roles: RoleRef[] = roleRows.map((r) => ({
+    roleId: r.id,
+    roleName: r.name,
+    teamName: r.team?.name ?? null,
+  }));
+  const targets: RoleTarget[] = roleRows
+    .filter((r) => r.recruit_target != null)
+    .map((r) => ({ roleId: r.id, target: r.recruit_target as number }));
+
+  const roleIds = roleRows.map((r) => r.id);
+  if (roleIds.length === 0) return { roles, qualifications: [], targets };
+
+  const { data: qualData, error: qualErr } = await supabase
+    .from("team_membership")
+    .select("role_id, member_id, member:member_id(status)")
+    .in("role_id", roleIds);
+  if (qualErr) throw qualErr;
+
+  const qualifications: RoleQualification[] = ((qualData ?? []) as unknown as (QualEmbed & {
+    member_id: string;
+  })[]).map((q) => ({
+    roleId: q.role_id,
+    memberId: q.member_id,
+    active: q.member?.status === "active",
+  }));
+
+  return { roles, qualifications, targets };
 }

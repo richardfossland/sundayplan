@@ -41,7 +41,7 @@ export interface IssueOptions {
 
 export type VerifyResult =
   | { ok: true; claims: MagicLinkClaims }
-  | { ok: false; reason: "malformed" | "bad_signature" | "expired" };
+  | { ok: false; reason: "malformed" | "bad_signature" | "expired" | "wrong_purpose" };
 
 export async function signMagicLink(opts: IssueOptions, secret: string): Promise<string> {
   const iat = opts.now ?? nowSeconds();
@@ -84,6 +84,15 @@ export async function verifyMagicLink(
     claims = JSON.parse(textDecoder.decode(fromB64url(body))) as MagicLinkClaims;
   } catch {
     return { ok: false, reason: "malformed" };
+  }
+  // Reject a token from the *other* token family (e.g. a church-invite) before
+  // returning a MagicLinkClaims, mirroring verifyChurchInvite's purpose guard.
+  // Both families share the same secret + machinery, but an invite token carries
+  // no member_id/sub; without this check verifyMagicLink would hand back claims
+  // whose typed member_id/sub are actually undefined — a cross-token confusion
+  // any caller that skips its own purpose re-check would silently inherit.
+  if (claims.purpose === "church_invite" || !claims.member_id) {
+    return { ok: false, reason: "wrong_purpose" };
   }
   if (typeof claims.exp !== "number" || claims.exp < (now ?? nowSeconds())) {
     return { ok: false, reason: "expired" };

@@ -10,6 +10,7 @@
  */
 import {
   eligibleReplacements,
+  consecutiveWeeksServed,
   type ConflictContext,
   type PlacedAssignment,
   type MemberInfo,
@@ -19,7 +20,6 @@ import {
 import type { Availability, SkillLevel } from "@sundayplan/shared";
 
 const DAY_MS = 86_400_000;
-const WEEK_MS = 7 * DAY_MS;
 
 /**
  * Minimal client surface satisfied by both the RLS server client and the
@@ -35,17 +35,6 @@ interface TargetAssignment {
   service_id: string;
   role_id: string;
   member_id: string;
-}
-
-function consecutiveWeeks(dates: Date[]): number {
-  if (dates.length === 0) return 0;
-  const weeks = [...new Set(dates.map((d) => Math.floor(d.getTime() / WEEK_MS)))].sort((a, b) => b - a);
-  let run = 1;
-  for (let i = 1; i < weeks.length; i++) {
-    if (weeks[i] === weeks[i - 1] - 1) run++;
-    else break;
-  }
-  return run;
 }
 
 /**
@@ -186,7 +175,7 @@ export async function findReplacements(
             days_since_last_assignment_same_role: daysSince(acceptedSameRole.get(`${tm.member_id}:${assignment.role_id}`)),
             target_serves_per_month: m?.target_serves_per_month ?? 2,
             availability: m?.availability ?? [],
-            consecutive_weeks_served: consecutiveWeeks(anyDates ?? []),
+            consecutive_weeks_served: consecutiveWeeksServed(anyDates ?? [], now),
             has_frequent_partner_on_service: false,
             has_trainer_paired: false,
           },

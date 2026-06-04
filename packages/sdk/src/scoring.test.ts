@@ -375,6 +375,20 @@ describe("consecutiveWeeksServed", () => {
     expect(consecutiveWeeksServed(recent, new Date("2026-06-04T10:00:00Z"))).toBe(3);
   });
 
+  // Regression: the swap-finder (apps/web/lib/data/swap.ts) used to roll its own
+  // consecutive-weeks counter (raw Math.floor(t/WEEK_MS), Thursday-anchored, no
+  // rest check) that returned 3 for a streak that ended ~a year ago, while the
+  // autofill path used this SDK function and returned 0. Same member, same
+  // history, two answers → a false -10 burnout penalty + bogus "consider rest"
+  // warning when the rested member surfaced as a substitute. swap.ts now calls
+  // this function, so both flows must agree on the burnout signal.
+  it("returns 0 for a 3-week streak that ended ~a year ago (swap/autofill parity)", () => {
+    const base = new Date("2025-06-01T10:00:00Z"); // ~1 year before `now`
+    const oldStreak = [0, 7, 14].map((off) => new Date(base.getTime() + off * 86_400_000));
+    // The replaced ad-hoc helper (no rest check) would have returned 3 here.
+    expect(consecutiveWeeksServed(oldStreak, new Date("2026-06-04T10:00:00Z"))).toBe(0);
+  });
+
   it("treats two services in the same Mon–Sun week as one (no Thursday-epoch split)", () => {
     // Wed 23:00Z and Thu 01:00Z are ~2h apart and in the same calendar week,
     // but a Thursday-anchored epoch bucket would split them into two weeks.

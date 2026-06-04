@@ -15,6 +15,8 @@ export type CredentialKind =
 
 export type CredentialStatus = "current" | "pending" | "expired" | "none";
 
+const DAY_MS = 86_400_000;
+
 /** The six credential kinds, in display order — the canonical UI source. */
 export const CREDENTIAL_KINDS: readonly CredentialKind[] = [
   "background_check",
@@ -48,10 +50,28 @@ export interface MemberCredential {
   expires_at?: string | null;
 }
 
+/** Matches a date-only ISO string (`YYYY-MM-DD`), the form we store/collect. */
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * The instant a credential's expiry actually lapses. A date-only `expires_at`
+ * (the convention used by the DB and the `<input type=date>`) means the
+ * certification is valid *through the end of that calendar day*, so it lapses
+ * at the start of the following day — not at UTC-midnight of the expiry day,
+ * which would wrongly mark a still-valid credential expired all day. A full
+ * timestamp, if ever supplied, is honoured exactly.
+ */
+function expiryInstant(expires_at: string): number {
+  if (DATE_ONLY.test(expires_at)) {
+    return new Date(`${expires_at}T00:00:00Z`).getTime() + DAY_MS;
+  }
+  return new Date(expires_at).getTime();
+}
+
 /** True if this single credential is valid right now. */
 export function isCredentialCurrent(cred: MemberCredential | undefined, now: Date = new Date()): boolean {
   if (!cred || cred.status !== "current") return false;
-  if (cred.expires_at) return new Date(cred.expires_at).getTime() >= now.getTime();
+  if (cred.expires_at) return expiryInstant(cred.expires_at) > now.getTime();
   return true;
 }
 

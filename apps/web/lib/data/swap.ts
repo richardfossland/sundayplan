@@ -29,6 +29,16 @@ type DbClient = {
   from: (table: string) => { select: (cols: string) => PromiseLike<{ data: unknown; error: unknown }> };
 };
 
+/** Throw if a Supabase result carries an error. Without this a failed query
+ *  silently degrades to `data ?? []`, which the swap finder would read as
+ *  "no candidates" — telling a planner nobody can cover a slot when the read
+ *  actually failed. Mirrors lib/data/schedule.ts + autofill.ts. */
+function throwIfError(...results: { error: unknown }[]): void {
+  for (const r of results) {
+    if (r.error) throw r.error;
+  }
+}
+
 interface TargetAssignment {
   id: string;
   church_id: string;
@@ -69,6 +79,10 @@ export async function findReplacements(
     availability: Availability[] | null;
   }
   interface MshipRow { member_id: string; role_id: string; skill_level: SkillLevel; is_key_person: boolean }
+
+  // The core five must succeed; church_settings is optional (pre-migration
+  // tolerant, like schedule.ts + autofill.ts) and falls back to defaults below.
+  throwIfError(servicesRes, rolesRes, assignmentsRes, membersRes, membershipsRes);
 
   const services = (servicesRes.data ?? []) as ServiceRow[];
   const roles = (rolesRes.data ?? []) as RoleRow[];
@@ -252,7 +266,7 @@ interface OpenSwapRow {
  * church and to the `swap_planner_all` policy.
  */
 export async function listOpenSwaps(supabase: QueryClient): Promise<OpenSwap[]> {
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("swap_request")
     .select(
       "id, assignment_id, status, note, created_at, requested_by_member_id, " +
@@ -261,6 +275,11 @@ export async function listOpenSwaps(supabase: QueryClient): Promise<OpenSwap[]> 
     )
     .eq("status", "open")
     .order("created_at", { ascending: false });
+
+  // Don't swallow the read error — an empty list here reads as "no open swaps",
+  // hiding volunteers who handed slots back. Surface it like the rest of the
+  // data layer (if (error) throw error).
+  if (error) throw error;
 
   const rows = (data ?? []) as unknown as OpenSwapRow[];
   return rows

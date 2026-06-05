@@ -12,7 +12,7 @@
  * lib/data/schedule.ts + autofill.ts). Selecting it broke every swap shortlist.
  */
 import { describe, expect, it } from "vitest";
-import { findReplacements } from "./swap";
+import { findReplacements, listOpenSwaps } from "./swap";
 
 // Columns that genuinely exist on each table in the migrations. Any select of a
 // column outside these sets would error at runtime against real PostgREST.
@@ -110,5 +110,48 @@ describe("findReplacements — Supabase query contract", () => {
     const seen: { table: string; select: string }[] = [];
     const ranked = await findReplacements(fakeClient(baseData(), seen) as never, TARGET, NOW);
     expect(ranked.map((r) => r.member_id)).toEqual(["ben"]);
+  });
+
+  // A DB error on a core query must NOT be swallowed. Mirrors lib/data/schedule.ts
+  // + autofill.ts, which both `throw r.error` — otherwise a failed query degrades
+  // silently to ZERO candidates, telling a planner "no one can cover this slot"
+  // when in fact the read failed.
+  it("throws when a core query errors instead of returning an empty shortlist", async () => {
+    const erroringClient = (failTable: string) => ({
+      from(table: string) {
+        return {
+          select() {
+            return Promise.resolve(
+              table === failTable
+                ? { data: null, error: { message: `relation "${table}" failed` } }
+                : { data: baseData()[table] ?? [], error: null },
+            );
+          },
+        };
+      },
+    });
+
+    for (const failTable of ["service", "role", "assignment", "member", "team_membership"]) {
+      await expect(
+        findReplacements(erroringClient(failTable) as never, TARGET, NOW),
+        `expected throw when ${failTable} query errors`,
+      ).rejects.toBeTruthy();
+    }
+  });
+});
+
+describe("listOpenSwaps — error handling", () => {
+  it("throws when the swap_request query errors instead of returning []", async () => {
+    const client = {
+      from() {
+        const builder = {
+          select: () => builder,
+          eq: () => builder,
+          order: () => Promise.resolve({ data: null, error: { message: "swap_request failed" } }),
+        };
+        return builder;
+      },
+    };
+    await expect(listOpenSwaps(client as never)).rejects.toBeTruthy();
   });
 });

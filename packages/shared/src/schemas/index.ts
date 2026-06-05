@@ -28,7 +28,7 @@ export const ChurchInputSchema = z.object({
   slug: z.string().regex(/^[a-z0-9-]+$/).min(2).max(60),
   locale: localeCode.default("no"),
   timezone: z.string().min(1).default("Europe/Oslo"),
-  denomination: z.string().optional().nullable(),
+  denomination: z.string().max(120).optional().nullable(),
 });
 
 export const TonoStatus = z.enum([
@@ -40,11 +40,11 @@ export const TonoStatus = z.enum([
 ]);
 
 export const ChurchSettingsInputSchema = z.object({
-  ccli_license_number: z.string().optional().nullable(),
+  ccli_license_number: z.string().max(64).optional().nullable(),
   ccli_size_category: z.enum(["A","B","C","D","E","F"]).optional().nullable(),
   ccli_streaming_addon: z.boolean().optional(),
   tono_license_status: TonoStatus.optional(),
-  tono_customer_id: z.string().optional().nullable(),
+  tono_customer_id: z.string().max(64).optional().nullable(),
   tono_streaming_addon: z.boolean().optional(),
   default_max_assignments_per_month: z.number().int().min(1).max(31).optional(),
   reminder_cadence: z

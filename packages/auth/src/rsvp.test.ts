@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyAssignmentResponse,
   applyResponse,
   buildResponseLinks,
   consumeSingleUseLink,
@@ -229,5 +230,91 @@ describe("consumeSingleUseLink (atomic single-use, TOCTOU race)", () => {
     };
     const res = await consumeSingleUseLink(client, "hash");
     expect(res).toEqual({ ok: false, reason: "consume_failed", detail: "boom" });
+  });
+});
+
+describe("applyAssignmentResponse (claim-scoped write, no false success on 0 rows)", () => {
+  // A test double for the conditional UPDATE that filters by BOTH id and
+  // member_id and reports how many rows it touched via .select("id"). The store
+  // owns ONE assignment row; a write only "matches" when both filters agree.
+  function fakeStore(row: { id: string; member_id: string }) {
+    let lastStatus: string | null = null;
+    const client = {
+      from() {
+        return {
+          update(values: { status: string; responded_at: string }) {
+            return {
+              eq(_idCol: "id", id: string) {
+                return {
+                  eq(_memCol: "member_id", memberId: string) {
+                    return {
+                      select() {
+                        if (id === row.id && memberId === row.member_id) {
+                          lastStatus = values.status;
+                          return Promise.resolve({ data: [{ id: row.id }], error: null });
+                        }
+                        // No row matches both filters → supabase-js resolves with
+                        // an EMPTY array and NO error. The pre-fix edge function
+                        // ignored this and reported ok:true anyway.
+                        return Promise.resolve({ data: [], error: null });
+                      },
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+    return { client, getStatus: () => lastStatus };
+  }
+
+  it("writes and reports ok when the assignment belongs to the token member", async () => {
+    const { client, getStatus } = fakeStore({ id: "a1", member_id: "m1" });
+    const res = await applyAssignmentResponse(client, "a1", "m1", "accepted");
+    expect(res).toEqual({ ok: true });
+    expect(getStatus()).toBe("accepted");
+  });
+
+  it("does NOT report success when the assignment belongs to a different member", async () => {
+    // The vulnerability: token claims member m1, but assignment a1 is owned by
+    // m2. A naive .update().eq().eq() resolves with no error (0 rows) and the
+    // old code returned ok:true. The seam must surface not_found instead.
+    const { client, getStatus } = fakeStore({ id: "a1", member_id: "m2" });
+    const res = await applyAssignmentResponse(client, "a1", "m1", "accepted");
+    expect(res).toEqual({ ok: false, reason: "not_found" });
+    expect(getStatus()).toBeNull(); // nothing was written
+  });
+
+  it("does NOT report success when the assignment does not exist", async () => {
+    const { client } = fakeStore({ id: "a1", member_id: "m1" });
+    const res = await applyAssignmentResponse(client, "missing", "m1", "declined");
+    expect(res).toEqual({ ok: false, reason: "not_found" });
+  });
+
+  it("surfaces a DB error as update_failed", async () => {
+    const client = {
+      from() {
+        return {
+          update() {
+            return {
+              eq() {
+                return {
+                  eq() {
+                    return {
+                      select: () =>
+                        Promise.resolve({ data: null, error: { message: "boom" } }),
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    };
+    const res = await applyAssignmentResponse(client, "a1", "m1", "accepted");
+    expect(res).toEqual({ ok: false, reason: "update_failed", detail: "boom" });
   });
 });

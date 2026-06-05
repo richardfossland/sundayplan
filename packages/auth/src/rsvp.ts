@@ -165,3 +165,60 @@ export async function consumeSingleUseLink(
   if (!data || data.length === 0) return { ok: false, reason: "already_used" };
   return { ok: true };
 }
+
+/**
+ * Minimal Supabase client surface for the claim-scoped assignment write: a
+ * conditional UPDATE on `assignment` filtered by BOTH the token's `assignment_id`
+ * and its `member_id`, returning the rows it actually touched. Both the
+ * supabase-js builder (Edge Function) and a test double satisfy this.
+ */
+export interface AssignmentResponseClient {
+  from(table: "assignment"): {
+    update(values: { status: string; responded_at: string }): {
+      eq(col: "id", value: string): {
+        eq(col: "member_id", value: string): {
+          select(cols: "id"): PromiseLike<{
+            data: Array<{ id: string }> | null;
+            error: { message: string } | null;
+          }>;
+        };
+      };
+    };
+  };
+}
+
+/** Outcome of writing an accept/decline to the token's own assignment. */
+export type ApplyAssignmentResult =
+  | { ok: true }
+  | { ok: false; reason: "not_found" }
+  | { ok: false; reason: "update_failed"; detail: string };
+
+/**
+ * Write an accept/decline to the assignment named in a verified token, scoped to
+ * the token's `member_id`. Closes a silent-success hole: a plain supabase-js
+ * `.update().eq().eq()` resolves with no error even when it matches ZERO rows —
+ * e.g. the assignment doesn't exist, or belongs to a DIFFERENT member than the
+ * token claims. Reporting `ok: true` there would tell a volunteer their RSVP
+ * landed while nothing changed (and could mask a cross-member token mix-up).
+ *
+ * By requesting `.select("id")` we learn the affected-row count: zero rows ⇒
+ * `not_found`, never a false success.
+ */
+export async function applyAssignmentResponse(
+  db: AssignmentResponseClient,
+  assignmentId: string,
+  memberId: string,
+  status: string,
+  now: Date = new Date(),
+): Promise<ApplyAssignmentResult> {
+  const { data, error } = await db
+    .from("assignment")
+    .update({ status, responded_at: now.toISOString() })
+    .eq("id", assignmentId)
+    .eq("member_id", memberId)
+    .select("id");
+
+  if (error) return { ok: false, reason: "update_failed", detail: error.message };
+  if (!data || data.length === 0) return { ok: false, reason: "not_found" };
+  return { ok: true };
+}

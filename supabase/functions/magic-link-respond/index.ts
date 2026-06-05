@@ -7,7 +7,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 // Direct .ts import (Deno needs the extension; the package barrel uses
 // extensionless re-exports that only the bundler/Node side resolves).
 import { tokenHash, verifyMagicLink } from "../../../packages/auth/src/magic-link.ts";
-import { consumeSingleUseLink } from "../../../packages/auth/src/rsvp.ts";
+import { applyAssignmentResponse, consumeSingleUseLink } from "../../../packages/auth/src/rsvp.ts";
 
 const MAGICLINK_SECRET = Deno.env.get("MAGICLINK_SECRET") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -70,12 +70,20 @@ Deno.serve(async (req) => {
   }
 
   const status = action === "accept" ? "accepted" : "declined";
-  const { error: updateError } = await db
-    .from("assignment")
-    .update({ status, responded_at: new Date().toISOString() })
-    .eq("id", claims.assignment_id)
-    .eq("member_id", claims.member_id);
-  if (updateError) return json({ error: "update_failed", detail: updateError.message }, 500);
+  // Scoped write that surfaces a ZERO-row match instead of reporting success.
+  // The token's member_id MUST own the assignment_id it claims; if no row
+  // matches both (assignment gone, or — defence in depth — a cross-member token
+  // mix-up), we must NOT tell the volunteer their RSVP landed.
+  const applied = await applyAssignmentResponse(
+    db,
+    claims.assignment_id,
+    claims.member_id,
+    status,
+  );
+  if (!applied.ok) {
+    if (applied.reason === "not_found") return json({ error: "not_found" }, 404);
+    return json({ error: "update_failed", detail: applied.detail }, 500);
+  }
 
   return json({ ok: true, status });
 });

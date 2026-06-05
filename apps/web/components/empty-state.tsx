@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { Sparkles } from "lucide-react";
 
 /**
  * Reusable first-run empty state. SaaS-onboarding research: a blank screen with
@@ -7,7 +8,7 @@ import Link from "next/link";
  * appear here and gives exactly one clear next action.
  */
 export function EmptyState({
-  icon = "✦",
+  icon = <Sparkles className="h-5 w-5" strokeWidth={1.75} aria-hidden />,
   title,
   blurb,
   cta,

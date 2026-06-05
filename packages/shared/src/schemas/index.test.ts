@@ -4,6 +4,7 @@ import {
   AvailabilityInputSchema,
   AvailabilityPattern,
   ChurchInputSchema,
+  ChurchSettingsInputSchema,
   DeliveryInputSchema,
   MagicLinkIssueSchema,
   MemberInputSchema,
@@ -73,6 +74,28 @@ describe("ChurchInputSchema", () => {
 
   it("rejects an empty name", () => {
     expect(ChurchInputSchema.safeParse({ name: "", slug: "ok-slug" }).success).toBe(false);
+  });
+
+  it("bounds the free-text denomination so it can't be used to store unbounded blobs", () => {
+    const base = { name: "Alta Frikirke", slug: "alta-frikirke" };
+    expect(ChurchInputSchema.safeParse({ ...base, denomination: "Lutheran" }).success).toBe(true);
+    expect(
+      ChurchInputSchema.safeParse({ ...base, denomination: "x".repeat(121) }).success,
+    ).toBe(false);
+  });
+});
+
+describe("ChurchSettingsInputSchema free-text bounds", () => {
+  it("bounds ccli_license_number and tono_customer_id", () => {
+    expect(
+      ChurchSettingsInputSchema.safeParse({ ccli_license_number: "1234567" }).success,
+    ).toBe(true);
+    expect(
+      ChurchSettingsInputSchema.safeParse({ ccli_license_number: "1".repeat(65) }).success,
+    ).toBe(false);
+    expect(
+      ChurchSettingsInputSchema.safeParse({ tono_customer_id: "x".repeat(65) }).success,
+    ).toBe(false);
   });
 });
 

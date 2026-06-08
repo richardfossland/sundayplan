@@ -57,11 +57,14 @@ export function Badge({ children, tone = "neutral" }: { children: ReactNode; ton
   );
 }
 
-export function StatTile({ label, value, hint, tone = "neutral" }: { label: string; value: ReactNode; hint?: string; tone?: Tone }) {
+export function StatTile({ label, value, hint, tone = "neutral", icon }: { label: string; value: ReactNode; hint?: string; tone?: Tone; icon?: ReactNode }) {
   const accent = tone === "danger" ? "text-[color:var(--color-danger)]" : tone === "warning" ? "text-[color:var(--color-warning)]" : tone === "gold" ? "text-gold-300" : "text-ink-50";
   return (
     <Card className="px-5 py-4">
-      <div className="text-xs font-medium uppercase tracking-wider text-ink-500">{label}</div>
+      <div className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-ink-500">
+        {icon ? <span className={`shrink-0 ${accent}`}>{icon}</span> : null}
+        {label}
+      </div>
       <div className={`mt-2 text-3xl font-semibold tabular-nums ${accent}`}>{value}</div>
       {hint ? <div className="mt-1 text-xs text-ink-500">{hint}</div> : null}
     </Card>

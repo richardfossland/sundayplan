@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CalendarDays, UserCheck, Clock, UserPlus, AlertTriangle } from "lucide-react";
 import { SectionTitle, StatTile, Card, CardHeader, Badge } from "@/components/ui";
 import { ConflictPanel } from "@/components/dashboard";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
@@ -18,7 +19,7 @@ export default async function DashboardPage() {
         <SectionTitle eyebrow={t("dash.welcome")}>{t("dash.welcomeTitle")}</SectionTitle>
         <OnboardingChecklist checklist={d.checklist} />
         <EmptyState
-          icon="📅"
+          icon={<CalendarDays className="h-5 w-5" strokeWidth={1.75} aria-hidden />}
           title={t("dash.ready.title")}
           blurb={t("dash.ready.blurb")}
           cta={{ label: t("dash.ready.cta"), href: "/teams/new" }}
@@ -43,23 +44,27 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatTile
+          icon={<UserCheck className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
           label={t("dash.stat.rolesFilled")}
           value={required != null ? `${filled}/${required}` : filled}
           hint={d.nextService ? t("dash.stat.rolesFilled.hint") : "—"}
         />
         <StatTile
+          icon={<Clock className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
           label={t("dash.stat.pending")}
           value={d.pendingRsvps}
           tone={d.pendingRsvps > 0 ? "warning" : "neutral"}
           hint={t("dash.stat.pending.hint")}
         />
         <StatTile
+          icon={<UserPlus className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
           label={t("dash.stat.openSlots")}
           value={d.openSlots}
           tone={d.openSlots > 0 ? "warning" : "neutral"}
           hint={t("dash.stat.openSlots.hint")}
         />
         <StatTile
+          icon={<AlertTriangle className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />}
           label={t("dash.stat.conflicts")}
           value={d.hardConflicts}
           tone={d.hardConflicts > 0 ? "danger" : "neutral"}
@@ -118,7 +123,7 @@ export default async function DashboardPage() {
               </>
             ) : (
               <EmptyState
-                icon="📅"
+                icon={<CalendarDays className="h-5 w-5" strokeWidth={1.75} aria-hidden />}
                 title={t("dash.noService.title")}
                 blurb={t("dash.noService.blurb")}
                 cta={{ label: t("dash.noService.cta"), href: "/services/new" }}

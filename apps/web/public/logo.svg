@@ -1,0 +1,21 @@
+<svg viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1F7A55"></stop><stop offset="1" stop-color="#114A34"></stop></linearGradient>
+    <radialGradient id="glow" cx="0.26" cy="0.2" r="0.95"><stop offset="0" stop-color="#ffffff" stop-opacity="0.12"></stop><stop offset="0.55" stop-color="#ffffff" stop-opacity="0"></stop></radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F2D58A"></stop><stop offset="1" stop-color="#EBB84B"></stop></linearGradient>
+    <clipPath id="clip"><rect width="1024" height="1024" rx="228"></rect></clipPath>
+  </defs>
+  <g clip-path="url(#clip)">
+    <rect width="1024" height="1024" fill="url(#bg)"></rect>
+    <rect width="1024" height="1024" fill="url(#glow)"></rect>
+    <rect x="376" y="246" width="30" height="86" rx="15" fill="#EBB84B"></rect>
+    <rect x="618" y="246" width="30" height="86" rx="15" fill="#EBB84B"></rect>
+    <rect x="256" y="292" width="512" height="478" rx="48" fill="none" stroke="#EBB84B" stroke-width="20"></rect>
+    <line x1="284" y1="394" x2="740" y2="394" stroke="#EBB84B" stroke-width="16" stroke-linecap="round"></line>
+    <line x1="436" y1="420" x2="436" y2="742" stroke="#EBB84B" stroke-width="12" stroke-linecap="round" opacity="0.85"></line>
+    <line x1="588" y1="420" x2="588" y2="742" stroke="#EBB84B" stroke-width="12" stroke-linecap="round" opacity="0.85"></line>
+    <line x1="284" y1="581" x2="740" y2="581" stroke="#EBB84B" stroke-width="12" stroke-linecap="round" opacity="0.85"></line>
+    <rect x="503.0" y="602.6" width="18.0" height="117.9" rx="4.0" fill="url(#gold)"></rect>
+    <rect x="474.6" y="635.1" width="74.9" height="18.0" rx="4.0" fill="url(#gold)"></rect>
+  </g>
+</svg>

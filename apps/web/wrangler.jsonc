@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sundayplan",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-05-05",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // TEST PHASE: gate this behind Cloudflare Access (zero-trust) until the RLS
+  // fixes land — see DEPLOY.md. Swap to plan-test.sundaysuite.app here if you
+  // want a throwaway test host instead of the production name.
+  "routes": [{ "pattern": "plan.sundaysuite.app", "custom_domain": true }],
+  "observability": {
+    "enabled": true
+  }
+  // Runtime env (set as Worker secrets, NOT committed):
+  //   NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY are build-time
+  //   inlined (export them before `cf:build`); the service-role key is a
+  //   runtime secret:  npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+}

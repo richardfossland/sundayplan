@@ -10,9 +10,13 @@
     "lint": "echo 'lint placeholder'",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "clean": "rm -rf .next .turbo"
+    "clean": "rm -rf .next .turbo .open-next",
+    "cf:build": "opennextjs-cloudflare build",
+    "cf:preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
   },
   "dependencies": {
+    "@opennextjs/cloudflare": "^1.19.11",
     "@sundayplan/auth": "workspace:*",
     "@sundayplan/sdk": "workspace:*",
     "@sundayplan/shared": "workspace:*",

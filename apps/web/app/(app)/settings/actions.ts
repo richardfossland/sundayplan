@@ -70,6 +70,7 @@ export async function updateChurchSettings(
     // 0 = off (the default); the hard rest-window rule stays dormant.
     min_rest_days: Number(blankToUndef(formData.get("min_rest_days")) ?? "0"),
     auto_buy_sms_overage: formData.get("auto_buy_sms_overage") === "on",
+    ai_consent: formData.get("ai_consent") === "on",
     single_use_response_links: formData.get("single_use_response_links") === "on",
     // Licensing
     ccli_license_number: blankToUndef(formData.get("ccli_license_number")) ?? null,

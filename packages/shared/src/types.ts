@@ -53,6 +53,7 @@ export interface ChurchSettings {
   /** Opt-in: mint strict one-shot volunteer response links instead of reusable ones. */
   single_use_response_links: boolean;
   sms_quota_used: number;
+  ai_consent: boolean;
   auto_buy_sms_overage: boolean;
   sundaystage_connected: boolean;
   sundayrec_connected: boolean;

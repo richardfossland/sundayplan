@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { schemas } from "@sundayplan/shared";
 import { createClient } from "@/lib/supabase/client";
+import { useT } from "@/lib/i18n/client";
 
 // `useSearchParams` (we read `?error=` / `?next=` from the OAuth callback)
 // forces a client-side bailout, so the form lives behind a Suspense boundary.
@@ -17,6 +18,7 @@ export default function SignUpPage() {
 }
 
 function SignUpForm() {
+  const t = useT();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
@@ -68,20 +70,20 @@ function SignUpForm() {
       router.push(next);
       router.refresh();
     } else {
-      setNotice("Check your email to confirm your account, then sign in.");
+      setNotice(t("auth.signup.confirmNotice"));
       setLoading(false);
     }
   }
 
   return (
     <div className="rounded-xl border border-white/[0.07] bg-ink-900/60 p-6">
-      <h1 className="text-lg font-semibold text-ink-50">Create your account</h1>
-      <p className="mt-1 text-sm text-ink-500">Start planning your church's services.</p>
+      <h1 className="text-lg font-semibold text-ink-50">{t("auth.signup.title")}</h1>
+      <p className="mt-1 text-sm text-ink-500">{t("auth.signup.sub")}</p>
       <form onSubmit={onSubmit} className="mt-5 space-y-3">
         <input
           type="email"
           required
-          placeholder="Email"
+          placeholder={t("auth.email")}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           className="w-full rounded-lg border border-white/10 bg-ink-950/60 px-3 py-2 text-sm text-ink-100 outline-none placeholder:text-ink-600 focus:border-gold-400/50"
@@ -90,7 +92,7 @@ function SignUpForm() {
           type="password"
           required
           minLength={6}
-          placeholder="Password (min 6 chars)"
+          placeholder={t("auth.passwordMin")}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           className="w-full rounded-lg border border-white/10 bg-ink-950/60 px-3 py-2 text-sm text-ink-100 outline-none placeholder:text-ink-600 focus:border-gold-400/50"
@@ -102,12 +104,12 @@ function SignUpForm() {
           disabled={loading}
           className="w-full rounded-lg bg-gold-400 px-3 py-2 text-sm font-semibold text-ink-950 transition-opacity hover:opacity-90 disabled:opacity-50"
         >
-          {loading ? "Creating…" : "Create account"}
+          {loading ? t("auth.signup.submitting") : t("auth.signup.submit")}
         </button>
       </form>
       <div className="my-5 flex items-center gap-3">
         <span className="h-px flex-1 bg-white/10" />
-        <span className="text-xs text-ink-600">or continue with</span>
+        <span className="text-xs text-ink-600">{t("auth.signup.orContinue")}</span>
         <span className="h-px flex-1 bg-white/10" />
       </div>
       <div className="space-y-2">
@@ -120,15 +122,15 @@ function SignUpForm() {
             className="w-full rounded-lg border border-white/10 bg-ink-950/60 px-3 py-2 text-sm font-medium text-ink-100 transition-colors hover:border-gold-400/40 hover:bg-ink-900/60 disabled:opacity-50"
           >
             {oauthBusy === provider
-              ? "Redirecting…"
-              : `Continue with ${schemas.OAUTH_PROVIDER_LABELS[provider]}`}
+              ? t("auth.signup.redirecting")
+              : t("auth.signup.continueWith", { provider: schemas.OAUTH_PROVIDER_LABELS[provider] })}
           </button>
         ))}
       </div>
       <p className="mt-4 text-center text-xs text-ink-500">
-        Already have an account?{" "}
+        {t("auth.signup.haveAccount")}{" "}
         <Link href={signInHref} className="text-gold-300 hover:underline">
-          Sign in
+          {t("auth.signup.signIn")}
         </Link>
       </p>
     </div>

@@ -8,7 +8,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "echo 'lint placeholder'",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "node scripts/check-i18n.mjs && tsc --noEmit",
     "test": "vitest run",
     "clean": "rm -rf .next .turbo .open-next",
     "cf:build": "opennextjs-cloudflare build",

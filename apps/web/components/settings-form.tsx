@@ -218,6 +218,27 @@ export function VolunteerRulesForm({ settings }: { settings: ChurchSettings }) {
             />
             {t("settings.comms.singleUse")}
           </label>
+
+          <div className="border-t border-white/[0.06] pt-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-500">{t("settings.privacy.heading")}</h3>
+            <label className="mt-2 flex items-center gap-2 text-sm text-ink-300">
+              <input
+                type="checkbox"
+                name="ai_consent"
+                defaultChecked={settings.ai_consent}
+                className={checkbox}
+              />
+              {t("settings.privacy.aiConsent")}
+            </label>
+            <p className="mt-1 text-xs text-ink-600">{t("settings.privacy.aiConsent.hint")}</p>
+            <a
+              href="/api/export"
+              className="mt-3 inline-block rounded-lg border border-white/10 bg-ink-950/60 px-3 py-1.5 text-xs font-medium text-ink-200 hover:border-gold-400/40"
+            >
+              {t("settings.privacy.export")}
+            </a>
+            <p className="mt-1 text-xs text-ink-600">{t("settings.privacy.export.hint")}</p>
+          </div>
         </section>
 
         <section className="space-y-3" hidden={tab !== "licensing"}>

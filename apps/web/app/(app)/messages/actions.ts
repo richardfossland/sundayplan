@@ -6,8 +6,10 @@ import { getCurrentChurchId } from "@/lib/data/church";
 import { buildRecipientValues } from "@/lib/data/comms";
 import { schemas } from "@sundayplan/shared";
 import {
+  checkSmsQuota,
   createProvider,
   resolveRecipients,
+  smsSegments,
   type SendRequest,
 } from "@sundayplan/sdk";
 
@@ -111,6 +113,39 @@ export async function sendServiceMessage(formData: FormData) {
   // as the nominal record channel (per-delivery channel is authoritative).
   const messageChannel = channel === "preferred" ? "sms" : channel;
 
+  // Quota gate: SMS is the metered resource (email is unmetered). Refuse the
+  // whole send up front rather than transmitting half a roster — a partial
+  // rota announcement is worse than a clear "quota reached" error.
+  const plannedSmsSegments = resolved.recipients
+    .filter((r) => r.channel === "sms")
+    .reduce(
+      (sum, r) => sum + smsSegments("body" in r.rendered ? (r.rendered as { body: string }).body : ""),
+      0,
+    );
+
+  let quotaState: { used: number; usedAtReset: string } | null = null;
+  if (plannedSmsSegments > 0) {
+    const [{ data: church }, { data: settings }] = await Promise.all([
+      supabase.from("church").select("plan_tier").eq("id", churchId).single(),
+      supabase
+        .from("church_settings")
+        .select("sms_quota_used, sms_quota_used_at_reset")
+        .eq("church_id", churchId)
+        .single(),
+    ]);
+    quotaState = {
+      used: settings?.sms_quota_used ?? 0,
+      usedAtReset: settings?.sms_quota_used_at_reset ?? new Date(0).toISOString(),
+    };
+    const decision = checkSmsQuota(
+      { tier: church?.plan_tier, used: quotaState.used, usedAtReset: quotaState.usedAtReset },
+      plannedSmsSegments,
+    );
+    if (!decision.allowed) {
+      throw new Error(decision.reason ?? "SMS quota reached for this month");
+    }
+  }
+
   const { data: userData } = await supabase.auth.getUser();
 
   // 2. Insert the composed message.
@@ -133,6 +168,7 @@ export async function sendServiceMessage(formData: FormData) {
 
   // 3. Transmit + record deliveries.
   const deliveries: Record<string, unknown>[] = [];
+  let sentSmsSegments = 0;
 
   for (const r of resolved.recipients) {
     const provider = createProvider(r.channel, process.env as Record<string, string | undefined>);
@@ -146,6 +182,9 @@ export async function sendServiceMessage(formData: FormData) {
       reference: `${messageId}:${r.member_id}`,
     };
     const result = await provider.send(req);
+    if (r.channel === "sms" && result.outcome === "sent") {
+      sentSmsSegments += smsSegments(sendBody);
+    }
     deliveries.push({
       message_id: messageId,
       church_id: churchId,
@@ -177,6 +216,24 @@ export async function sendServiceMessage(formData: FormData) {
   if (deliveries.length > 0) {
     const { error: delErr } = await supabase.from("message_delivery").insert(deliveries);
     if (delErr) throw delErr;
+  }
+
+  // Persist quota usage for the segments that actually transmitted. The
+  // pre-check used the planned total; the counter only records reality.
+  if (quotaState && sentSmsSegments > 0) {
+    const rollover = checkSmsQuota(
+      { tier: null, used: quotaState.used, usedAtReset: quotaState.usedAtReset },
+      0,
+    );
+    const baseUsed = rollover.shouldReset ? 0 : quotaState.used;
+    const { error: quotaErr } = await supabase
+      .from("church_settings")
+      .update({
+        sms_quota_used: baseUsed + sentSmsSegments,
+        ...(rollover.shouldReset ? { sms_quota_used_at_reset: new Date().toISOString() } : {}),
+      })
+      .eq("church_id", churchId);
+    if (quotaErr) throw quotaErr;
   }
 
   revalidatePath("/messages");

@@ -7,17 +7,20 @@
  * and returns success WITHOUT any network call — so the build, the tests, and a
  * fresh local dev install need no secrets and hit no external API.
  *
- * Real providers (Twilio for SMS, Resend/SMTP for email, web push) are
- * intentionally NOT implemented here. They live behind the `createProvider`
- * factory and are gated by env vars. Until those are wired up + credentialed,
- * the factory falls back to the stub. This is the clean seam: implementing a
- * real provider means satisfying the `Provider` interface and registering it in
- * `createProvider` — no caller changes.
- *
- * See `docs/DOMAIN.md` (Phase 6 section) for the deferral rationale.
+ * Real providers live in `./providers/` and are selected by `createProvider`
+ * purely from env vars: Twilio (SMS) when `TWILIO_ACCOUNT_SID`+`TWILIO_AUTH_TOKEN`
+ * are present, Resend (email) on `RESEND_API_KEY`, SMTP (email, Node-only
+ * deployments) on `SMTP_URL`. Web push remains a seam. Without credentials the
+ * factory falls back to the stub, so builds, tests, and fresh dev installs need
+ * no secrets and hit no external API — and going live is pasting env vars, not
+ * changing callers.
  */
 
 import type { MessageChannel } from "@sundayplan/shared";
+
+import { ResendEmailProvider } from "./providers/resend";
+import { SmtpEmailProvider } from "./providers/smtp";
+import { TwilioSmsProvider } from "./providers/twilio";
 
 export interface SendRequest {
   channel: MessageChannel;
@@ -107,32 +110,27 @@ export interface ProviderEnv {
 }
 
 /**
- * Pick the provider for a channel based on env. Today this always returns the
- * stub; the commented seams below are exactly where a real provider slots in
- * once its adapter is implemented and its env vars are present. Keeping the
- * branch here (rather than at call sites) means the rest of the app never knows
- * which provider is live.
+ * Pick the provider for a channel based on env. Keeping the branch here
+ * (rather than at call sites) means the rest of the app never knows which
+ * provider is live: paste credentials into the deployment env and the same
+ * code path starts transmitting for real.
  */
 export function createProvider(
   channel: MessageChannel,
   env: ProviderEnv = {},
   stubOptions: StubProviderOptions = {},
 ): Provider {
-  // When real credentials are present, a real adapter would be returned here.
-  // The adapters are unimplemented (Phase 6+), so we deliberately fall through
-  // to the stub even if `hasRealProvider` is true — keeping the build network-
-  // and secret-free. Implementing an adapter = add its branch below.
   if (hasRealProvider(channel, env)) {
     switch (channel) {
       case "sms":
-        // SEAM: return new TwilioSmsProvider(env);
-        break;
+        return new TwilioSmsProvider(env);
       case "email":
-        // SEAM: return env.RESEND_API_KEY
-        //   ? new ResendEmailProvider(env) : new SmtpEmailProvider(env);
-        break;
+        // Resend wins when both are configured: it is the Workers-safe path,
+        // while SMTP needs raw TCP (Node-only deployments — see ./providers/smtp).
+        return env.RESEND_API_KEY ? new ResendEmailProvider(env) : new SmtpEmailProvider(env);
       case "push":
-        // SEAM: return new WebPushProvider(env);
+        // SEAM: return new WebPushProvider(env); — deliberately unimplemented,
+        // SMS + email satisfy the volunteer-communication promise.
         break;
     }
   }

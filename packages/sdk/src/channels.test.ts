@@ -44,10 +44,18 @@ describe("createProvider", () => {
     expect(createProvider("push").name).toBe("stub");
   });
 
-  it("still returns the stub even when no real adapter exists for the env", () => {
-    // env present but adapters unimplemented → must not throw, falls back to stub
-    const p = createProvider("sms", { TWILIO_ACCOUNT_SID: "x", TWILIO_AUTH_TOKEN: "y" });
-    expect(p.name).toBe("stub");
+  it("returns the real adapter when its credentials are present", () => {
+    expect(createProvider("sms", { TWILIO_ACCOUNT_SID: "x", TWILIO_AUTH_TOKEN: "y" }).name).toBe(
+      "twilio",
+    );
+    expect(createProvider("email", { RESEND_API_KEY: "k" }).name).toBe("resend");
+    expect(createProvider("email", { SMTP_URL: "smtp://h" }).name).toBe("smtp");
+    // Resend wins over SMTP (Workers-safe path) when both are configured.
+    expect(createProvider("email", { RESEND_API_KEY: "k", SMTP_URL: "smtp://h" }).name).toBe(
+      "resend",
+    );
+    // Push has no adapter yet — credentials alone must not break the fallback.
+    expect(createProvider("push", { WEB_PUSH_VAPID_PRIVATE_KEY: "k" }).name).toBe("stub");
   });
 });
 

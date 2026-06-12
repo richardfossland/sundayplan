@@ -14,6 +14,11 @@
   "routes": [{ "pattern": "plan.sundaysuite.app", "custom_domain": true }],
   "observability": {
     "enabled": true
+  },
+  // Public, non-secret runtime vars. NEXT_PUBLIC_APP_URL is what volunteer
+  // magic links are built against (lib/data/magic-link.ts appBaseUrl).
+  "vars": {
+    "NEXT_PUBLIC_APP_URL": "https://plan.sundaysuite.app"
   }
   // Runtime env (set as Worker secrets, NOT committed):
   //   NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY are build-time

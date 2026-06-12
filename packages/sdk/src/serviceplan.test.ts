@@ -57,12 +57,14 @@ function item(partial: Partial<ServiceItem>): ServiceItem {
 describe("toCanonicalKind", () => {
   it("maps every known Plan kind to its canonical kind", () => {
     expect(toCanonicalKind("welcome")).toBe("welcome");
-    expect(toCanonicalKind("worship_set")).toBe("worship_set");
+    // The canonical union has no worship_set/closing — they map per the
+    // canonical PLAN_TO_CANONICAL table (sunday-contracts v0.4.0 mapping.ts).
+    expect(toCanonicalKind("worship_set")).toBe("song");
     expect(toCanonicalKind("song")).toBe("song");
     expect(toCanonicalKind("scripture")).toBe("scripture");
     expect(toCanonicalKind("sermon")).toBe("sermon");
     expect(toCanonicalKind("response")).toBe("response");
-    expect(toCanonicalKind("closing")).toBe("closing");
+    expect(toCanonicalKind("closing")).toBe("custom");
     expect(toCanonicalKind("announcement")).toBe("announcement");
     expect(toCanonicalKind("gap")).toBe("gap");
   });
@@ -71,6 +73,9 @@ describe("toCanonicalKind", () => {
     expect(toCanonicalKind("offering")).toBe("custom");
     expect(toCanonicalKind("")).toBe("custom");
     expect(toCanonicalKind("WELCOME")).toBe("custom"); // case-sensitive by design
+    // Inherited Object.prototype members must not leak through the lookup.
+    expect(toCanonicalKind("constructor")).toBe("custom");
+    expect(toCanonicalKind("toString")).toBe("custom");
   });
 });
 
@@ -79,7 +84,10 @@ describe("toCanonicalKind", () => {
 describe("toServicePlan — service header", () => {
   it("renames Plan fields onto the canonical service shape", () => {
     const plan = toServicePlan({ service, items: [] });
+    // Canonical envelope: schema_version on both the plan and the service ref.
+    expect(plan.schema_version).toBe(1);
     expect(plan.service).toEqual({
+      schema_version: 1,
       id: "svc1",
       church_id: "ch1",
       name: "Sunday Morning",
@@ -119,11 +127,13 @@ describe("toServicePlan — items", () => {
     const plan = toServicePlan({ service, items });
     expect(plan.items[0].kind).toBe("song");
     expect(plan.items[0].song_ref).toEqual({
-      song_id: "song1",
       sundaysong_id: "ss-999",
+      local_id: "song1",
       title: "10,000 Reasons",
       ccli_song_id: "6016351",
       tono_work_id: "TONO-42",
+      default_key: "G",
+      language: "en",
     });
     expect(plan.items[0].duration_min).toBe(4);
   });

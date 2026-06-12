@@ -199,7 +199,9 @@ describe("serviceplan bundle — property: read(serialize(write(x))) recovers x"
       });
     }
     return {
+      schema_version: 1,
       service: {
+        schema_version: 1,
         id,
         church_id: `ch-${int(rng, 0, 999)}`,
         name: `Service ${int(rng, 0, 999)}`,

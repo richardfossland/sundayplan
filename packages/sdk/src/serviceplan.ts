@@ -5,18 +5,25 @@
  * the setlist into the cross-app canonical `ServicePlan` shape that SundayStage
  * (and the rest of the suite) consumes. No DB, no network, no clock.
  *
- * The canonical shape + the `ServiceItemKind` union here MIRROR
- * `sunday-contracts`; converge once that platform package is published. We can't
- * import `@sunday/*` yet (sunday-platform is not published), so the contract is
- * re-declared locally with this note. Do not add a cross-repo path dependency.
+ * The canonical shapes here are FIELD-IDENTICAL mirrors of sunday-platform
+ * `@sunday/contracts` v0.4.0 — `src/service.ts` (`ServicePlan`, `ServiceRef`,
+ * `SetlistItem`, `ServiceItemKind`), `src/song.ts` (`SongRef`) and
+ * `src/mapping.ts` (`PLAN_TO_CANONICAL`). We can't import `@sunday/*` yet
+ * (sunday-platform is not published), so the contract is re-declared locally
+ * with this note. Do not add or rename fields without changing the canonical
+ * contract first; do not add a cross-repo path dependency.
  *
  * Two domain unions feed the canonical `kind`:
  *   - SundayPlan's own per-service {@link ServiceItemKind}
  *     (welcome | song | scripture | sermon | announcement | gap), and
  *   - the template-level {@link TemplateItemKind}
  *     (+ worship_set | response | closing).
- * Both are funnelled through one mapping; anything unrecognized degrades to
- * `"custom"` rather than throwing, so an exporter never loses a line.
+ * Both are funnelled through one mapping (the same table as the canonical
+ * `serviceItemKindFromPlan`): `worship_set` → `song`, `closing` → `custom`,
+ * anything unrecognized degrades to `"custom"` rather than throwing, so an
+ * exporter never loses a line. Consumers that must also accept payloads from
+ * OLDER SundayPlan builds (which put `worship_set`/`closing` on the wire) can
+ * use the canonical `serviceItemKindFromWire` normaliser.
  */
 
 import type {
@@ -28,45 +35,56 @@ import type {
   SetlistSong,
 } from "@sundayplan/shared";
 
-// ── Canonical contract (mirrors sunday-contracts; converge once published) ─────
+// ── Canonical contract (FIELD-IDENTICAL mirror of sunday-contracts v0.4.0) ─────
+
+/** Wire schema version every canonical payload carries. */
+export const SCHEMA_VERSION = 1;
 
 /**
- * Canonical service-item kind shared across the Sunday suite. Superset of
- * SundayPlan's local kinds plus the worship/liturgy kinds Stage understands.
- * mirrors sunday-contracts; converge once published.
+ * Canonical service-item kind shared across the Sunday suite.
+ * FIELD-IDENTICAL mirror of `ServiceItemKind` (@sunday/contracts v0.4.0,
+ * src/service.ts). Note this is the CANONICAL union — SundayPlan's local
+ * `worship_set`/`closing` are mapped onto it by {@link toCanonicalKind}.
  */
 export type CanonicalServiceItemKind =
-  | "welcome"
-  | "worship_set"
   | "song"
   | "scripture"
   | "sermon"
-  | "response"
-  | "closing"
+  | "reading"
+  | "prayer"
+  | "offering"
   | "announcement"
+  | "welcome"
+  | "response"
+  | "media"
   | "gap"
   | "custom";
 
 /**
- * A reference to a song, carrying through both the local SundayPlan song id and
- * (when known) the SundaySong catalog id so Stage can resolve lyrics/chords.
- * mirrors sunday-contracts; converge once published.
+ * A cross-app reference to a song. FIELD-IDENTICAL mirror of `SongRef`
+ * (@sunday/contracts v0.4.0, src/song.ts). The SundayPlan-local song id rides
+ * in `local_id`; `sundaysong_id` is the shared-catalog id when linked. Carries
+ * the song's home key (toneart) + language so Stage can present it faithfully.
  */
 export interface CanonicalSongRef {
-  /** SundayPlan-local song id. */
-  song_id: string;
   /** SundaySong catalog id, when this song is linked to the shared catalog. */
   sundaysong_id: string | null;
+  /** The originating app's own row id (SundayPlan-local song id). */
+  local_id: string | null;
   title: string;
   /** CCLI song number, when registered. */
   ccli_song_id: string | null;
   /** TONO work id, when registered. */
   tono_work_id: string | null;
+  /** The song's home key, e.g. "G". */
+  default_key: string | null;
+  /** BCP-47 / ISO-639 language code; "und" when undetermined. */
+  language: string;
 }
 
 /**
- * One line in a canonical service plan.
- * mirrors sunday-contracts; converge once published.
+ * One line in a canonical service plan. FIELD-IDENTICAL mirror of
+ * `SetlistItem` (@sunday/contracts v0.4.0, src/service.ts).
  */
 export interface CanonicalServiceItem {
   position: number;
@@ -85,10 +103,14 @@ export interface CanonicalServiceItem {
 
 /**
  * The canonical, app-agnostic service plan SundayStage consumes.
- * mirrors sunday-contracts; converge once published.
+ * FIELD-IDENTICAL mirror of `ServicePlan`/`ServiceRef` (@sunday/contracts
+ * v0.4.0, src/service.ts) — including the `schema_version` envelope on both
+ * the plan and the service ref.
  */
 export interface ServicePlan {
+  schema_version: number;
   service: {
+    schema_version: number;
     id: string;
     church_id: string;
     name: string;
@@ -105,18 +127,20 @@ export interface ServicePlan {
 
 /**
  * Map a SundayPlan kind (either the per-service {@link ServiceItemKind} or the
- * template-level {@link TemplateItemKind}) onto the canonical kind. Unknown
- * inputs degrade to `"custom"` so an exporter never drops or throws on a line it
- * doesn't recognize. mirrors sunday-contracts; converge once published.
+ * template-level {@link TemplateItemKind}) onto the canonical kind. The table
+ * matches the canonical `PLAN_TO_CANONICAL` (@sunday/contracts v0.4.0,
+ * src/mapping.ts) exactly: `worship_set` → `song` (the canonical union has no
+ * worship_set), `closing` → `custom`. Unknown inputs degrade to `"custom"` so
+ * an exporter never drops or throws on a line it doesn't recognize.
  */
 const KIND_MAP: Record<string, CanonicalServiceItemKind> = {
   welcome: "welcome",
-  worship_set: "worship_set",
+  worship_set: "song",
   song: "song",
   scripture: "scripture",
   sermon: "sermon",
   response: "response",
-  closing: "closing",
+  closing: "custom",
   announcement: "announcement",
   gap: "gap",
 };
@@ -124,7 +148,11 @@ const KIND_MAP: Record<string, CanonicalServiceItemKind> = {
 export function toCanonicalKind(
   kind: ServiceItemKind | TemplateItemKind | string,
 ): CanonicalServiceItemKind {
-  return KIND_MAP[kind] ?? "custom";
+  // Only OWN keys count, so a hostile "constructor"/"toString" input degrades
+  // to "custom" instead of leaking an inherited Object.prototype member.
+  return Object.prototype.hasOwnProperty.call(KIND_MAP, kind)
+    ? KIND_MAP[kind]
+    : "custom";
 }
 
 // ── Exporter ───────────────────────────────────────────────────────────────────
@@ -156,11 +184,13 @@ export interface ToServicePlanInput {
 
 function songRef(song: Song): CanonicalSongRef {
   return {
-    song_id: song.id,
     sundaysong_id: song.sundaysong_id,
+    local_id: song.id,
     title: song.title,
     ccli_song_id: song.ccli_song_id,
     tono_work_id: song.tono_work_id,
+    default_key: song.default_key,
+    language: song.language || "und",
   };
 }
 
@@ -210,7 +240,9 @@ export function toServicePlan(input: ToServicePlanInput): ServicePlan {
   }
 
   return {
+    schema_version: SCHEMA_VERSION,
     service: {
+      schema_version: SCHEMA_VERSION,
       id: input.service.id,
       church_id: input.service.church_id,
       name: input.service.name,

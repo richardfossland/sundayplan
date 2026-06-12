@@ -1,7 +1,7 @@
 -- ════════════════════════════════════════════════════════════════════════════
 -- 0006_comms.sql — Communications infrastructure (Phase 6)
 --
--- Three tables, all church-scoped via the is_church_member() helper from 0001:
+-- Three tables, all church-scoped via the is_member_of() helper from 0001:
 --   message_template — planner-authored, reusable templates (sms/email/push)
 --   message          — one outbound send (optionally tied to a service)
 --   message_delivery — one row per recipient with its lifecycle status
@@ -76,18 +76,18 @@ alter table message_delivery enable row level security;
 
 -- message_template: church members manage their church's templates
 create policy message_template_rw on message_template
-  for all using (is_church_member(message_template.church_id))
-  with check (is_church_member(message_template.church_id));
+  for all using (is_member_of(message_template.church_id))
+  with check (is_member_of(message_template.church_id));
 
 -- message: church members manage their church's messages
 create policy message_rw on message
-  for all using (is_church_member(message.church_id))
-  with check (is_church_member(message.church_id));
+  for all using (is_member_of(message.church_id))
+  with check (is_member_of(message.church_id));
 
 -- message_delivery: church members manage their church's deliveries
 create policy message_delivery_rw on message_delivery
-  for all using (is_church_member(message_delivery.church_id))
-  with check (is_church_member(message_delivery.church_id));
+  for all using (is_member_of(message_delivery.church_id))
+  with check (is_member_of(message_delivery.church_id));
 
 -- Phase 7 seam: a magic-link volunteer may read deliveries addressed to them,
 -- mirroring the assignment_volunteer_select policy in 0003.

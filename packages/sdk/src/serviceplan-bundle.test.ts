@@ -22,7 +22,9 @@ import {
 
 function makePlan(over: Partial<ServicePlan["service"]> = {}): ServicePlan {
   return {
+    schema_version: 1,
     service: {
+      schema_version: 1,
       id: "svc1",
       church_id: "ch1",
       name: "Sunday Morning",

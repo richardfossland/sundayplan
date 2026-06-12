@@ -25,3 +25,7 @@ next-env.d.ts
 
 # generated types (regen'd via `pnpm db:types`)
 packages/db/types.generated.ts
+
+# OpenNext/Wrangler build output
+.open-next/
+.wrangler/

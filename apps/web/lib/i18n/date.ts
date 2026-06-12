@@ -12,7 +12,22 @@
 
 /** Map our locale codes to BCP 47 tags. */
 function bcp47(locale: string): string {
-  return locale === "no" ? "nb-NO" : "en-GB";
+  switch (locale) {
+    case "no":
+      return "nb-NO";
+    case "sv":
+      return "sv-SE";
+    case "da":
+      return "da-DK";
+    case "de":
+      return "de-DE";
+    case "fr":
+      return "fr-FR";
+    case "pl":
+      return "pl-PL";
+    default:
+      return "en-GB";
+  }
 }
 
 /**

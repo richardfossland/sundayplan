@@ -7,6 +7,7 @@ import { MemberCredentialEditor } from "@/components/member-credential-editor";
 import { getPerson, getPersonSchedule, getMemberCredentials } from "@/lib/data/people";
 import { getMemberAvailability } from "@/lib/data/availability";
 import { setMemberStatus } from "@/app/(app)/people/actions";
+import { ErasePersonButton } from "@/components/erase-person-button";
 import { getT, getLocale } from "@/lib/i18n/server";
 
 const STATUS_TONE: Record<string, "success" | "warning" | "danger" | "neutral"> = {
@@ -50,11 +51,14 @@ export default async function PersonPage({ params }: { params: Promise<{ id: str
               {t("common.edit")}
             </Link>
             {person.status === "archived" ? (
-              <form action={setMemberStatus.bind(null, id, "active")}>
-                <button className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-300 transition-colors hover:border-white/25">
-                  {t("people.reactivate")}
-                </button>
-              </form>
+              <>
+                <form action={setMemberStatus.bind(null, id, "active")}>
+                  <button className="rounded-lg border border-white/10 px-3 py-1.5 text-sm text-ink-300 transition-colors hover:border-white/25">
+                    {t("people.reactivate")}
+                  </button>
+                </form>
+                <ErasePersonButton id={id} />
+              </>
             ) : (
               <form action={setMemberStatus.bind(null, id, "archived")}>
                 <button className="rounded-lg border border-[color:var(--color-danger)]/30 px-3 py-1.5 text-sm text-[color:var(--color-danger)] transition-colors hover:border-[color:var(--color-danger)]/60">

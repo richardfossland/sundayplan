@@ -134,3 +134,36 @@ export async function deleteMemberCredential(
   revalidatePath(`/people/${memberId}`);
   revalidatePath("/schedule");
 }
+
+/**
+ * GDPR erasure: anonymize a person while keeping the rows their service
+ * history hangs on (assignments stay for coverage/fairness aggregates, but
+ * carry no personal data once the member row is scrubbed). Irreversible.
+ * RLS (planner policies) authorizes the write — no admin client.
+ */
+export async function erasePerson(id: string): Promise<void> {
+  const supabase = await createClient();
+  const churchId = await getCurrentChurchId();
+  if (!churchId) throw new Error("No church found for your account");
+
+  const { error } = await supabase
+    .from("member")
+    .update({
+      display_name: "Slettet person",
+      phone_e164: null,
+      email: null,
+      user_id: null,
+      birthday: null,
+      notes: null,
+      tags: [],
+      household: null,
+      status: "archived",
+      archived_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("church_id", churchId);
+  if (error) throw error;
+
+  revalidatePath("/people");
+  redirect("/people");
+}

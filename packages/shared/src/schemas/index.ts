@@ -59,6 +59,8 @@ export const ChurchSettingsInputSchema = z.object({
   min_rest_days: z.number().int().min(0).max(90).optional(),
   auto_buy_sms_overage: z.boolean().optional(),
   single_use_response_links: z.boolean().optional(),
+  // GDPR: church-level opt-in before any cloud-AI feature may send church data.
+  ai_consent: z.boolean().optional(),
 });
 
 /** Church-level identity fields editable from the settings page. */

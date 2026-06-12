@@ -21,6 +21,7 @@ export * from "./serviceplan-assemble";
 export * from "./serviceplan-fetcher";
 export * from "./channels";
 export * from "./quota";
+export * from "./observability";
 export * from "./providers/phone";
 export { TwilioSmsProvider } from "./providers/twilio";
 export { ResendEmailProvider } from "./providers/resend";

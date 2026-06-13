@@ -25,9 +25,23 @@ for f in supabase/migrations/*.sql; do
   run "$f"
 done
 
-echo "→ security/logic assertions (0018–0019)"
-docker cp supabase/tests/security_logic_test.sql "$NAME:/tmp/t.sql" >/dev/null
-OUT=$(docker exec "$NAME" psql -U postgres -v ON_ERROR_STOP=1 -f /tmp/t.sql 2>&1) || true
-echo "$OUT" | grep -E "PASS|FAIL" || true
-echo "$OUT" | grep -q "ALL SECURITY-LOGIC TESTS PASSED" || { echo "TESTS FAILED"; echo "$OUT" | tail -30; exit 1; }
+# Run every *_logic_test.sql in supabase/tests/ (security + booking + future).
+# Each test script ends with a `... TESTS PASSED` marker we assert on.
+for t in supabase/tests/*_logic_test.sql; do
+  echo "→ logic assertions: $(basename "$t")"
+  docker cp "$t" "$NAME:/tmp/t.sql" >/dev/null
+  OUT=$(docker exec "$NAME" psql -U postgres -v ON_ERROR_STOP=1 -f /tmp/t.sql 2>&1) || true
+  echo "$OUT" | grep -E "PASS|FAIL" || true
+  echo "$OUT" | grep -qE "ALL (SECURITY-LOGIC|BOOKING-LOGIC) TESTS PASSED" \
+    || { echo "TESTS FAILED in $(basename "$t")"; echo "$OUT" | tail -30; exit 1; }
+done
+
+# Idempotency: re-apply the booking migration a SECOND time against the same DB
+# and confirm it still succeeds (it is additive/guarded → must be re-runnable).
+# (Older migrations 0001–0020 predate the IF NOT EXISTS convention and are
+# applied once only by the loop above.)
+echo "→ idempotency: re-applying 0022_booking_schema.sql"
+run supabase/migrations/0022_booking_schema.sql
+echo "✓ booking migration is idempotent (applied twice cleanly)"
+
 echo "✓ all database checks passed"

@@ -20,6 +20,21 @@ export function ApprovalQueue({ initial }: { initial: Booking[] }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [conflictId, setConflictId] = useState<string | null>(null);
 
+  async function toggleSignage(id: string, next: boolean) {
+    // Optimistic; reconciled by the next refetch.
+    setPending((prev) => prev.map((b) => (b.id === id ? { ...b, show_on_signage: next } : b)));
+    try {
+      await fetch(`/api/bookings/${id}/signage`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ showOnSignage: next }),
+      });
+    } catch {
+      /* revert on failure via refetch */
+      void refetch();
+    }
+  }
+
   const refetch = useCallback(async () => {
     try {
       const now = new Date();
@@ -93,6 +108,15 @@ export function ApprovalQueue({ initial }: { initial: Booking[] }) {
                   {t("queue.requestedBy")}: {b.renter_name}
                 </p>
               ) : null}
+              <label className="mt-1.5 flex w-fit items-center gap-1.5 text-[0.7rem] text-ink-400">
+                <input
+                  type="checkbox"
+                  checked={b.show_on_signage}
+                  onChange={(e) => toggleSignage(b.id, e.target.checked)}
+                  className="h-3 w-3 rounded border-white/20 bg-ink-950/60"
+                />
+                {t("queue.signage")}
+              </label>
             </div>
             <div className="flex shrink-0 gap-2">
               <Button

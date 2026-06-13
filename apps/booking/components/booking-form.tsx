@@ -18,6 +18,10 @@ import type {
   Resource,
 } from "@/src/types/booking";
 import type { BundleLite } from "@/components/calendar";
+import type { BookingProposal } from "@/lib/nl-booking";
+
+/** The proposal shape returned by /api/bookings/parse (client-safe subset). */
+type NlProposal = BookingProposal;
 
 export interface BookingFormSeed {
   /** Local datetime-local start string (prefilled from the clicked slot). */
@@ -69,10 +73,71 @@ export function BookingForm({
   const [teardownMin, setTeardownMin] = useState(0);
   const [notes, setNotes] = useState("");
 
+  const [showOnSignage, setShowOnSignage] = useState(false);
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<RequestBookingResult | null>(null);
   const [peers, setPeers] = useState(0);
+
+  // ── Natural-language prompt bar (Phase 4). Hidden when AI is unavailable
+  // (no key / no consent / quota) — the manual form below always works. The
+  // model only PROPOSES; this pre-fills fields and the planner confirms.
+  const [nlPrompt, setNlPrompt] = useState("");
+  const [nlBusy, setNlBusy] = useState(false);
+  const [nlState, setNlState] = useState<
+    | { kind: "idle" }
+    | { kind: "unavailable"; reason: string }
+    | { kind: "applied"; unresolved: string[] }
+    | { kind: "error"; msg: string }
+  >({ kind: "idle" });
+
+  async function runNlParse() {
+    if (!nlPrompt.trim()) return;
+    setNlBusy(true);
+    setNlState({ kind: "idle" });
+    try {
+      const res = await fetch("/api/bookings/parse", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt: nlPrompt.trim() }),
+      });
+      const data = (await res.json()) as {
+        available?: boolean;
+        reason?: string;
+        error?: string;
+        proposal?: NlProposal;
+      };
+      if (data.available === false) {
+        setNlState({ kind: "unavailable", reason: data.reason ?? "no_key" });
+        return;
+      }
+      if (res.status === 429) {
+        setNlState({ kind: "unavailable", reason: "quota_exceeded" });
+        return;
+      }
+      if (!res.ok || !data.proposal) {
+        setNlState({ kind: "error", msg: t("nl.error") });
+        return;
+      }
+      applyProposal(data.proposal);
+      setNlState({ kind: "applied", unresolved: data.proposal.unresolved ?? [] });
+    } catch {
+      setNlState({ kind: "error", msg: t("nl.error") });
+    } finally {
+      setNlBusy(false);
+    }
+  }
+
+  function applyProposal(p: NlProposal) {
+    setMode("resources");
+    if (p.title) setTitle(p.title);
+    const ids = p.resources.map((r) => r.resourceId).filter((x): x is string => Boolean(x));
+    if (ids.length > 0) setSelectedResourceIds(ids);
+    if (p.eventTypeId) setEventTypeId(p.eventTypeId);
+    if (p.start) setStart(p.start);
+    if (p.end) setEnd(p.end);
+  }
 
   // Presence on the primary resource + start day. Hints only.
   const presenceResource =
@@ -129,6 +194,7 @@ export function BookingForm({
         setupMin,
         teardownMin,
         notes: notes || null,
+        showOnSignage,
       };
       if (mode === "bundle") body.bundleId = bundleId;
       else body.resourceIds = selectedResourceIds;
@@ -179,6 +245,43 @@ export function BookingForm({
         </div>
 
         <div className="space-y-3">
+          {/* Natural-language prompt bar (Phase 4). Pre-fills the form below. */}
+          <div className="rounded-lg border border-royal-400/20 bg-royal-500/[0.06] p-3">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-royal-200">✨ {t("nl.label")}</span>
+            </div>
+            <div className="mt-1.5 flex gap-2">
+              <Input
+                value={nlPrompt}
+                onChange={(e) => setNlPrompt(e.target.value)}
+                placeholder={t("nl.placeholder")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void runNlParse();
+                  }
+                }}
+              />
+              <Button type="button" variant="ghost" onClick={() => void runNlParse()} disabled={nlBusy}>
+                {nlBusy ? t("nl.parsing") : t("nl.parse")}
+              </Button>
+            </div>
+            {nlState.kind === "unavailable" ? (
+              <p className="mt-1.5 text-[0.7rem] text-ink-500">{t("nl.unavailable")}</p>
+            ) : null}
+            {nlState.kind === "applied" ? (
+              <p className="mt-1.5 text-[0.7rem] text-[color:var(--color-success)]">
+                {t("nl.applied")}
+                {nlState.unresolved.length > 0
+                  ? ` · ${t("nl.unresolved")}: ${nlState.unresolved.join(", ")}`
+                  : ""}
+              </p>
+            ) : null}
+            {nlState.kind === "error" ? (
+              <p className="mt-1.5 text-[0.7rem] text-[color:var(--color-danger)]">{nlState.msg}</p>
+            ) : null}
+          </div>
+
           <Field label={t("form.field.title")}>
             <Input
               value={title}
@@ -289,6 +392,16 @@ export function BookingForm({
           <Field label={t("form.field.notes")}>
             <Input value={notes} onChange={(e) => setNotes(e.target.value)} />
           </Field>
+
+          <label className="flex items-center gap-2 text-xs text-ink-300">
+            <input
+              type="checkbox"
+              checked={showOnSignage}
+              onChange={(e) => setShowOnSignage(e.target.checked)}
+              className="h-3.5 w-3.5 rounded border-white/20 bg-ink-950/60"
+            />
+            {t("form.field.signage")}
+          </label>
 
           {result && !result.ok && (chips.length > 0 || conflicts.length > 0) ? (
             <div className="rounded-lg border border-[color:var(--color-warning)]/30 bg-[color:var(--color-warning)]/10 p-3">

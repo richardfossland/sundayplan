@@ -17,6 +17,7 @@ import {
   listServices,
   requestBooking,
   resolveBundleResources,
+  setBookingSignage,
 } from "@/lib/data/booking";
 import { notifyPlannersOfRequest, sendBookingComms } from "@/lib/comms";
 
@@ -106,6 +107,16 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (result.ok) {
     const bookingId = result.booking_id;
     const isPending = result.status === "pending";
+
+    // Optional signage flag (planner-curated foyer-screen visibility). Scoped to
+    // the verified church; best-effort so it never blocks the request response.
+    if (body.showOnSignage === true) {
+      void setBookingSignage(ctx.churchId, bookingId, true).catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("[booking:signage] set on create failed", err);
+      });
+    }
+
     void fireRequestComms(ctx.churchId, bookingId, resourceIds[0], isPending).catch((err) => {
       // eslint-disable-next-line no-console
       console.error("[booking:comms] request notify failed", err);

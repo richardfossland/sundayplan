@@ -36,6 +36,7 @@ function Nav({ isPlanner }: { isPlanner: boolean }) {
   const links: { href: string; label: string; plannerOnly?: boolean }[] = [
     { href: "/calendar", label: t("nav.calendar") },
     { href: "/request", label: t("nav.request") },
+    { href: "/dashboard", label: t("nav.dashboard"), plannerOnly: true },
     { href: "/resources", label: t("nav.resources"), plannerOnly: true },
     { href: "/queue", label: t("nav.queue"), plannerOnly: true },
   ];

@@ -208,6 +208,41 @@ const no: Record<string, string> = {
   // Common
   "common.close": "Lukk",
   "common.loading": "Laster …",
+
+  // ── Phase 4 ────────────────────────────────────────────────────────────────
+  // Natural-language booking
+  "nl.label": "Beskriv bookingen",
+  "nl.placeholder": "f.eks. book storsalen til konfirmasjon 18. mai kl 12, projektor + 60 stoler",
+  "nl.parse": "Tolk",
+  "nl.parsing": "Tolker …",
+  "nl.applied": "Forslag fylt inn — sjekk og bekreft.",
+  "nl.unresolved": "fant ikke",
+  "nl.unavailable": "AI ikke tilgjengelig. Fyll ut skjemaet manuelt.",
+  "nl.error": "Klarte ikke tolke. Prøv igjen eller fyll ut manuelt.",
+
+  // Signage
+  "form.field.signage": "Vis på infoskjerm (foajé)",
+  "queue.signage": "Vis på infoskjerm",
+
+  // Navigation
+  "nav.dashboard": "Oversikt",
+
+  // Dashboard / utilization
+  "dash.title": "Utnyttelse",
+  "dash.subtitle": "Belegg per ressurs, travleste tider og kommende utleie.",
+  "dash.period.week": "Uke",
+  "dash.period.month": "Måned",
+  "dash.period.quarter": "Kvartal",
+  "dash.avgOccupancy": "Snitt belegg",
+  "dash.bookedHours": "Bookede timer",
+  "dash.peakHour": "Travleste time",
+  "dash.externalRentals": "Eksterne utleier",
+  "dash.occupancyByResource": "Belegg per ressurs",
+  "dash.busiestHours": "Travleste tider",
+  "dash.upcomingRentals": "Kommende eksterne utleier",
+  "dash.noRentals": "Ingen kommende utleier.",
+  "dash.free": "ledig",
+  "dash.empty": "Ingen ressurser å vise.",
 };
 
 export default no;

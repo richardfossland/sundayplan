@@ -803,6 +803,229 @@ export function dueBookingReminders(
   return out;
 }
 
+// ── Utilization dashboard (Phase 4) ─────────────────────────────────────────
+
+export interface UtilizationRow {
+  booking_id: string;
+  resource_id: string;
+  start_ms: number;
+  end_ms: number;
+  is_external: boolean;
+  status: string;
+}
+
+/**
+ * Approved booking_resource holds for a church in [from,to), flattened to
+ * util-block rows (effective range parsed from the stored tstzrange, so the
+ * dashboard's occupancy reflects the same buffered hold the calendar shows).
+ * `is_external` = the parent booking has a renter_name (no auth requester).
+ */
+export async function listUtilizationBlocks(
+  churchId: string,
+  range: { from: string; to: string },
+): Promise<UtilizationRow[]> {
+  const db = createBookingAdminClient();
+  // Approved bookings in window, with their renter flag.
+  const { data: bookings, error: bErr } = await db
+    .from("booking")
+    .select("id, renter_name, requested_by, status")
+    .eq("church_id", churchId)
+    .eq("status", "approved")
+    .lt("starts_at_utc", range.to)
+    .gt("ends_at_utc", range.from);
+  if (bErr) throw new Error(`listUtilizationBlocks bookings: ${bErr.message}`);
+  const list = (bookings ?? []) as {
+    id: string;
+    renter_name: string | null;
+    requested_by: string | null;
+    status: string;
+  }[];
+  if (list.length === 0) return [];
+  const meta = new Map(list.map((b) => [b.id, b]));
+
+  const { data: holds, error: hErr } = await db
+    .from("booking_resource")
+    .select("booking_id, resource_id, blocked_range, status")
+    .in("booking_id", list.map((b) => b.id))
+    .eq("status", "approved");
+  if (hErr) throw new Error(`listUtilizationBlocks holds: ${hErr.message}`);
+
+  const rows: UtilizationRow[] = [];
+  for (const h of (holds ?? []) as BookingResource[]) {
+    const r = parseTstzRange(h.blocked_range);
+    if (!r) continue;
+    const b = meta.get(h.booking_id);
+    rows.push({
+      booking_id: h.booking_id,
+      resource_id: h.resource_id,
+      start_ms: r.startMs,
+      end_ms: r.endMs,
+      is_external: Boolean(b?.renter_name) && !b?.requested_by,
+      status: h.status,
+    });
+  }
+  return rows;
+}
+
+// ── Signage feed (Phase 4) ─────────────────────────────────────────────────
+
+export interface SignageSlot {
+  title: string;
+  starts: string;
+  ends: string;
+  event_type: string | null;
+}
+export interface SignageRoom {
+  resource_id: string;
+  resource_name: string;
+  current: SignageSlot | null;
+  next: SignageSlot | null;
+}
+
+/**
+ * Current + next approved, signage-flagged booking per room for a church, as of
+ * `now`. Reads the `booking.signage_board` RPC (migration 0023) via service-role;
+ * church scoping is the caller's (it passes a server-verified church id).
+ */
+export async function getSignageBoard(
+  churchId: string,
+  now?: string,
+): Promise<SignageRoom[]> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db.rpc("signage_board", {
+    p_church_id: churchId,
+    p_now: now ?? new Date().toISOString(),
+  });
+  if (error) throw new Error(`getSignageBoard: ${error.message}`);
+  return (data ?? []) as SignageRoom[];
+}
+
+/** Toggle a booking's signage flag, scoped to the church (guard in WHERE). */
+export async function setBookingSignage(
+  churchId: string,
+  bookingId: string,
+  showOnSignage: boolean,
+): Promise<boolean> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db
+    .from("booking")
+    .update({ show_on_signage: showOnSignage })
+    .eq("id", bookingId)
+    .eq("church_id", churchId)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`setBookingSignage: ${error.message}`);
+  return Boolean(data);
+}
+
+// ── ICS feed reads (Phase 4) ────────────────────────────────────────────────
+
+/**
+ * Approved bookings holding `resourceId` in [from, to), for the ICS feed.
+ * Returns the booking core times + title; the route builds the VCALENDAR.
+ * Joined through booking_resource so we only emit this resource's holds.
+ */
+export async function listResourceBookingsForIcs(
+  resourceId: string,
+  range: { from: string; to: string },
+): Promise<Booking[]> {
+  const db = createBookingAdminClient();
+  // booking_resource rows for this resource, then fetch their bookings.
+  const { data: holds, error: holdErr } = await db
+    .from("booking_resource")
+    .select("booking_id")
+    .eq("resource_id", resourceId)
+    .eq("status", "approved");
+  if (holdErr) throw new Error(`listResourceBookingsForIcs holds: ${holdErr.message}`);
+  const ids = (holds ?? []).map((h) => (h as { booking_id: string }).booking_id);
+  if (ids.length === 0) return [];
+
+  const { data, error } = await db
+    .from("booking")
+    .select("*")
+    .in("id", ids)
+    .eq("status", "approved")
+    .lt("starts_at_utc", range.to)
+    .gt("ends_at_utc", range.from)
+    .order("starts_at_utc");
+  if (error) throw new Error(`listResourceBookingsForIcs: ${error.message}`);
+  return (data ?? []) as Booking[];
+}
+
+/** A resource by id, or null. NOT church-scoped — callers check ownership. */
+export async function getResourceById(resourceId: string): Promise<Resource | null> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db
+    .from("resource")
+    .select("*")
+    .eq("id", resourceId)
+    .maybeSingle();
+  if (error) throw new Error(`getResourceById: ${error.message}`);
+  return (data as Resource | null) ?? null;
+}
+
+// ── AI quota (Phase 4) ──────────────────────────────────────────────────────
+
+export interface AiQuotaRow {
+  plan_tier: string;
+  ai_quota_used: number;
+  ai_quota_used_at_reset: string;
+}
+
+/**
+ * Read the church's plan tier + AI-parse counter for the NL-booking gate.
+ * plan_tier lives on public.church; the counter on public.church_settings.
+ */
+export async function getAiQuotaRow(churchId: string): Promise<AiQuotaRow> {
+  const db = createAdminClient();
+  const [{ data: church, error: cErr }, { data: settings, error: sErr }] =
+    await Promise.all([
+      db.from("church").select("plan_tier").eq("id", churchId).maybeSingle(),
+      db
+        .from("church_settings")
+        .select("ai_quota_used, ai_quota_used_at_reset")
+        .eq("church_id", churchId)
+        .maybeSingle(),
+    ]);
+  if (cErr) throw new Error(`getAiQuotaRow church: ${cErr.message}`);
+  if (sErr) throw new Error(`getAiQuotaRow settings: ${sErr.message}`);
+  return {
+    plan_tier: (church?.plan_tier as string | undefined) ?? "free",
+    ai_quota_used: (settings?.ai_quota_used as number | undefined) ?? 0,
+    ai_quota_used_at_reset:
+      (settings?.ai_quota_used_at_reset as string | undefined) ??
+      new Date().toISOString(),
+  };
+}
+
+/** Whether the church has opted into cloud AI (church_settings.ai_consent). */
+export async function getAiConsent(churchId: string): Promise<boolean> {
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("church_settings")
+    .select("ai_consent")
+    .eq("church_id", churchId)
+    .maybeSingle();
+  if (error) throw new Error(`getAiConsent: ${error.message}`);
+  return Boolean(data?.ai_consent);
+}
+
+/** Persist the AI-parse counter after a successful (gated) parse. */
+export async function bumpAiQuota(
+  churchId: string,
+  nextUsed: number,
+  resetTimestamp: boolean,
+): Promise<void> {
+  const db = createAdminClient();
+  const patch: Record<string, unknown> = { ai_quota_used: nextUsed };
+  if (resetTimestamp) patch.ai_quota_used_at_reset = new Date().toISOString();
+  const { error } = await db
+    .from("church_settings")
+    .update(patch)
+    .eq("church_id", churchId);
+  if (error) throw new Error(`bumpAiQuota: ${error.message}`);
+}
+
 /**
  * Resolve a bundle to the full set of resource ids to book (primary + items),
  * scoped to the church. Returns null if the bundle isn't found in the church.

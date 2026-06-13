@@ -72,3 +72,38 @@ export function appBaseUrl(): string {
     "https://booking.sundaysuite.app"
   );
 }
+
+// ── ICS feed token (Phase 4) ──────────────────────────────────────────────────
+// A stable, unguessable per-resource token for the read-only calendar feed of a
+// NON-public resource (members/staff subscribe with the token URL). Derived as
+// HMAC(secret, "ics:" + resourceId), so it needs no storage and is the same for
+// every fetch (subscriptions are long-lived). Public resources need no token.
+
+/** Compute the deterministic ICS feed token for a resource (hex, 32 chars). */
+export async function icsFeedToken(resourceId: string): Promise<string> {
+  const secret = getSecret();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(`ics:${resourceId}`));
+  return Array.from(new Uint8Array(mac), (b) => b.toString(16).padStart(2, "0"))
+    .join("")
+    .slice(0, 32);
+}
+
+/** Constant-time-ish check that `token` is the resource's ICS feed token. */
+export async function verifyIcsFeedToken(
+  resourceId: string,
+  token: string,
+): Promise<boolean> {
+  if (!hasMagicLinkSecret() || !token) return false;
+  const expected = await icsFeedToken(resourceId);
+  if (expected.length !== token.length) return false;
+  let diff = 0;
+  for (let i = 0; i < expected.length; i++) diff |= expected.charCodeAt(i) ^ token.charCodeAt(i);
+  return diff === 0;
+}

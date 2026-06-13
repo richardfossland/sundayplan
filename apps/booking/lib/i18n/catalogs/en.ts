@@ -208,6 +208,41 @@ const en: Record<string, string> = {
   // Common
   "common.close": "Close",
   "common.loading": "Loading …",
+
+  // ── Phase 4 ────────────────────────────────────────────────────────────────
+  // Natural-language booking
+  "nl.label": "Describe the booking",
+  "nl.placeholder": "e.g. book the main hall for confirmation 18 May at 12, projector + 60 chairs",
+  "nl.parse": "Interpret",
+  "nl.parsing": "Interpreting …",
+  "nl.applied": "Proposal filled in — review and confirm.",
+  "nl.unresolved": "not found",
+  "nl.unavailable": "AI unavailable. Fill in the form manually.",
+  "nl.error": "Could not interpret. Try again or fill in manually.",
+
+  // Signage
+  "form.field.signage": "Show on signage (foyer screen)",
+  "queue.signage": "Show on signage",
+
+  // Navigation
+  "nav.dashboard": "Overview",
+
+  // Dashboard / utilization
+  "dash.title": "Utilization",
+  "dash.subtitle": "Occupancy per resource, busiest times and upcoming rentals.",
+  "dash.period.week": "Week",
+  "dash.period.month": "Month",
+  "dash.period.quarter": "Quarter",
+  "dash.avgOccupancy": "Avg occupancy",
+  "dash.bookedHours": "Booked hours",
+  "dash.peakHour": "Peak hour",
+  "dash.externalRentals": "External rentals",
+  "dash.occupancyByResource": "Occupancy per resource",
+  "dash.busiestHours": "Busiest times",
+  "dash.upcomingRentals": "Upcoming external rentals",
+  "dash.noRentals": "No upcoming rentals.",
+  "dash.free": "free",
+  "dash.empty": "No resources to show.",
 };
 
 export default en;

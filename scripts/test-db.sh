@@ -44,4 +44,8 @@ echo "→ idempotency: re-applying 0022_booking_schema.sql"
 run supabase/migrations/0022_booking_schema.sql
 echo "✓ booking migration is idempotent (applied twice cleanly)"
 
+echo "→ idempotency: re-applying 0023_booking_signage_ics.sql"
+run supabase/migrations/0023_booking_signage_ics.sql
+echo "✓ signage/ICS migration is idempotent (applied twice cleanly)"
+
 echo "✓ all database checks passed"

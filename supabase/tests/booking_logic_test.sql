@@ -185,4 +185,69 @@ begin
   raise notice 'PASS(7): anon sees 0 bookings (RLS) and cannot write directly (RPC-only)';
 end $$;
 
+-- ── Assertion 8: signage view + signage_board (migration 0023) ───────────────
+do $$
+declare
+  v_church uuid := (select id from public.church where slug = 'bookingkirken');
+  v_room   uuid := (select id from booking.resource where church_id = v_church and name = 'Storsalen');
+  v_now    timestamptz := '2026-05-18T13:00:00Z';
+  v_cur    uuid;  -- a booking running AT v_now, flagged for signage
+  v_next   uuid;  -- a later booking, flagged for signage
+  v_hidden uuid;  -- approved but NOT flagged → must be excluded
+  res      jsonb;
+  board    jsonb;
+  n        int;
+begin
+  -- Current booking 12:00–14:00 on Storsalen (no-approval resource → approved).
+  res := booking.request_booking(v_church, array[v_room], null, 'Bryllup',
+           '2026-05-18T12:00:00Z', '2026-05-18T14:00:00Z', 0, 0, null);
+  v_cur := (res->>'booking_id')::uuid;
+  update booking.booking set show_on_signage = true where id = v_cur;
+
+  -- Next booking 19:00–20:00, flagged.
+  res := booking.request_booking(v_church, array[v_room], null, 'Korøvelse',
+           '2026-05-18T19:00:00Z', '2026-05-18T20:00:00Z', 0, 0, null);
+  v_next := (res->>'booking_id')::uuid;
+  update booking.booking set show_on_signage = true where id = v_next;
+
+  -- A NOT-flagged approved booking on the next day → must never appear.
+  res := booking.request_booking(v_church, array[v_room], null, 'Skjult',
+           '2026-05-19T10:00:00Z', '2026-05-19T11:00:00Z', 0, 0, null);
+  v_hidden := (res->>'booking_id')::uuid;  -- show_on_signage stays false (default)
+
+  -- View shows the two flagged ones, not the hidden one.
+  select count(*) into n from booking.displayable
+   where church_id = v_church and booking_id in (v_cur, v_next, v_hidden);
+  if n <> 2 then
+    raise exception 'FAIL(8a): displayable returned % flagged rows (expected 2)', n;
+  end if;
+  if exists (select 1 from booking.displayable where booking_id = v_hidden) then
+    raise exception 'FAIL(8b): an unflagged booking leaked into displayable';
+  end if;
+
+  -- The view resolves the room as the location.
+  if not exists (
+    select 1 from booking.displayable
+     where booking_id = v_cur and resource_id = v_room and resource_name = 'Storsalen'
+  ) then
+    raise exception 'FAIL(8c): displayable did not resolve the room location';
+  end if;
+
+  -- signage_board: now=13:00 → Storsalen current=Bryllup, next=Korøvelse.
+  board := booking.signage_board(v_church, v_now);
+  if jsonb_array_length(board) < 1 then
+    raise exception 'FAIL(8d): signage_board returned no rooms';
+  end if;
+  if not exists (
+    select 1 from jsonb_array_elements(board) e
+     where e->>'resource_name' = 'Storsalen'
+       and e->'current'->>'title' = 'Bryllup'
+       and e->'next'->>'title' = 'Korøvelse'
+  ) then
+    raise exception 'FAIL(8e): signage_board now/next wrong: %', board;
+  end if;
+
+  raise notice 'PASS(8): signage view + board show only flagged approved bookings with now/next';
+end $$;
+
 select 'ALL BOOKING-LOGIC TESTS PASSED' as result;

@@ -9,11 +9,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireMember, requirePlanner } from "@/lib/auth-guard";
 import { createResource, listResources, updateResource } from "@/lib/data/booking";
-import type { ResourceKind } from "@/src/types/booking";
+import type { BookableBy, ResourceKind } from "@/src/types/booking";
 
 export const dynamic = "force-dynamic";
 
 const KINDS: ReadonlySet<string> = new Set(["room", "equipment", "person", "vehicle"]);
+const BOOKABLE: ReadonlySet<string> = new Set(["staff", "members", "public"]);
 
 export async function GET(): Promise<Response> {
   const guard = await requireMember();
@@ -41,6 +42,9 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (typeof kind !== "string" || !KINDS.has(kind)) {
     return NextResponse.json({ error: "invalid_kind" }, { status: 400 });
   }
+  if (body.bookableBy !== undefined && (typeof body.bookableBy !== "string" || !BOOKABLE.has(body.bookableBy))) {
+    return NextResponse.json({ error: "invalid_bookable_by" }, { status: 400 });
+  }
 
   const resource = await createResource({
     churchId: guard.ctx.churchId,
@@ -53,6 +57,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     defaultSetupMin: typeof body.defaultSetupMin === "number" ? body.defaultSetupMin : 0,
     defaultTeardownMin:
       typeof body.defaultTeardownMin === "number" ? body.defaultTeardownMin : 0,
+    bookableBy:
+      typeof body.bookableBy === "string" ? (body.bookableBy as BookableBy) : undefined,
     requiresApproval:
       typeof body.requiresApproval === "boolean" ? body.requiresApproval : true,
   });
@@ -76,6 +82,9 @@ export async function PATCH(req: NextRequest): Promise<Response> {
   if (body.kind !== undefined && (typeof body.kind !== "string" || !KINDS.has(body.kind))) {
     return NextResponse.json({ error: "invalid_kind" }, { status: 400 });
   }
+  if (body.bookableBy !== undefined && (typeof body.bookableBy !== "string" || !BOOKABLE.has(body.bookableBy))) {
+    return NextResponse.json({ error: "invalid_bookable_by" }, { status: 400 });
+  }
 
   const resource = await updateResource(guard.ctx.churchId, id, {
     kind: typeof body.kind === "string" ? (body.kind as ResourceKind) : undefined,
@@ -88,6 +97,8 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       typeof body.defaultSetupMin === "number" ? body.defaultSetupMin : undefined,
     defaultTeardownMin:
       typeof body.defaultTeardownMin === "number" ? body.defaultTeardownMin : undefined,
+    bookableBy:
+      typeof body.bookableBy === "string" ? (body.bookableBy as BookableBy) : undefined,
     requiresApproval:
       typeof body.requiresApproval === "boolean" ? body.requiresApproval : undefined,
     status: typeof body.status === "string" ? body.status : undefined,

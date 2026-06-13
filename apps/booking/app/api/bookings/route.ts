@@ -8,9 +8,39 @@
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { requireMember } from "@/lib/auth-guard";
-import { requestBooking } from "@/lib/data/booking";
+import {
+  listBookingResources,
+  listBookings,
+  listServices,
+  requestBooking,
+  resolveBundleResources,
+} from "@/lib/data/booking";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * GET /api/bookings?from=ISO&to=ISO[&includeInactive=1]
+ * The calendar's refetch endpoint: bookings in the window + the resource ids
+ * each holds + overlapping SundayPlan services for the read-only overlay.
+ */
+export async function GET(req: NextRequest): Promise<Response> {
+  const guard = await requireMember();
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+  const { ctx } = guard;
+
+  const url = new URL(req.url);
+  const from = url.searchParams.get("from") ?? undefined;
+  const to = url.searchParams.get("to") ?? undefined;
+  const includeInactive = url.searchParams.get("includeInactive") === "1";
+
+  const [bookings, services] = await Promise.all([
+    listBookings(ctx.churchId, { from, to, includeInactive }),
+    listServices(ctx.churchId, { from, to }),
+  ]);
+  const bookingResources = await listBookingResources(bookings.map((b) => b.id));
+
+  return NextResponse.json({ bookings, bookingResources, services });
+}
 
 export async function POST(req: NextRequest): Promise<Response> {
   const guard = await requireMember();
@@ -24,14 +54,26 @@ export async function POST(req: NextRequest): Promise<Response> {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 
-  const resourceIds = body.resourceIds;
   const title = body.title;
   const starts = body.starts;
   const ends = body.ends;
 
-  if (!Array.isArray(resourceIds) || resourceIds.length === 0) {
+  // Resources can be given directly OR via a bundle (primary + included). The
+  // bundle is resolved server-side, scoped to the verified church, so the body
+  // can't smuggle another church's resources.
+  let resourceIds: string[];
+  if (typeof body.bundleId === "string" && body.bundleId) {
+    const resolved = await resolveBundleResources(ctx.churchId, body.bundleId);
+    if (!resolved) {
+      return NextResponse.json({ error: "bundle_not_found" }, { status: 404 });
+    }
+    resourceIds = resolved;
+  } else if (Array.isArray(body.resourceIds) && body.resourceIds.length > 0) {
+    resourceIds = body.resourceIds as string[];
+  } else {
     return NextResponse.json({ error: "resourceIds_required" }, { status: 400 });
   }
+
   if (typeof title !== "string" || !title.trim()) {
     return NextResponse.json({ error: "title_required" }, { status: 400 });
   }
@@ -41,7 +83,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const result = await requestBooking({
     churchId: ctx.churchId,
-    resourceIds: resourceIds as string[],
+    resourceIds,
     eventTypeId: typeof body.eventTypeId === "string" ? body.eventTypeId : null,
     title: title.trim(),
     starts,

@@ -10,6 +10,7 @@ import {
   createEventType,
   listEventTypes,
   seedDefaultEventTypes,
+  updateEventType,
 } from "@/lib/data/booking";
 
 export const dynamic = "force-dynamic";
@@ -57,4 +58,36 @@ export async function POST(req: NextRequest): Promise<Response> {
     terms: typeof body.terms === "string" ? body.terms : null,
   });
   return NextResponse.json({ eventType }, { status: 201 });
+}
+
+export async function PATCH(req: NextRequest): Promise<Response> {
+  const guard = await requirePlanner();
+  if (!guard.ok) return NextResponse.json({ error: guard.error }, { status: guard.status });
+
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+  const id = body.id;
+  if (typeof id !== "string") {
+    return NextResponse.json({ error: "id_required" }, { status: 400 });
+  }
+
+  const eventType = await updateEventType(guard.ctx.churchId, id, {
+    name: typeof body.name === "string" ? body.name : undefined,
+    defaultSetupMin:
+      typeof body.defaultSetupMin === "number" ? body.defaultSetupMin : undefined,
+    defaultTeardownMin:
+      typeof body.defaultTeardownMin === "number" ? body.defaultTeardownMin : undefined,
+    defaultDurationMin:
+      typeof body.defaultDurationMin === "number" ? body.defaultDurationMin : undefined,
+    color: typeof body.color === "string" ? body.color : undefined,
+    requiresApproval:
+      typeof body.requiresApproval === "boolean" ? body.requiresApproval : undefined,
+    terms: typeof body.terms === "string" ? body.terms : undefined,
+  });
+  if (!eventType) return NextResponse.json({ error: "not_found" }, { status: 404 });
+  return NextResponse.json({ eventType });
 }

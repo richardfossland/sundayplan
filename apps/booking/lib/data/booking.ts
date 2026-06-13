@@ -19,6 +19,8 @@ import type {
   BundleItem,
   EventType,
   MutateBookingResult,
+  PaymentStatus,
+  RentalAgreementRow,
   RequestBookingResult,
   Resource,
   ResourceBundle,
@@ -234,6 +236,74 @@ export async function cancelBooking(
   });
   if (error) throw new Error(`cancelBooking: ${error.message}`);
   return data as MutateBookingResult;
+}
+
+// ── Rental monetization (migration 0024) ──────────────────────────────────────
+
+/** Persist the frozen agreement snapshot + rendered HTML for a booking. */
+export async function captureRentalAgreement(input: {
+  bookingId: string;
+  churchId: string;
+  snapshot: Record<string, unknown>;
+  html: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db.rpc("capture_rental_agreement", {
+    p_booking_id: input.bookingId,
+    p_church_id: input.churchId,
+    p_snapshot: input.snapshot,
+    p_html: input.html,
+  });
+  if (error) throw new Error(`captureRentalAgreement: ${error.message}`);
+  return data as { ok: boolean; error?: string };
+}
+
+/** Record the renter's cryptographic e-acceptance (accepted_at + token jti). */
+export async function acceptRentalAgreement(input: {
+  bookingId: string;
+  churchId: string;
+  tokenJti: string;
+}): Promise<{ ok: boolean; already?: boolean; error?: string }> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db.rpc("accept_rental_agreement", {
+    p_booking_id: input.bookingId,
+    p_church_id: input.churchId,
+    p_token_jti: input.tokenJti,
+  });
+  if (error) throw new Error(`acceptRentalAgreement: ${error.message}`);
+  return data as { ok: boolean; already?: boolean; error?: string };
+}
+
+/** Flip the booking's payment lifecycle (+ optional provider reference). */
+export async function setPaymentStatus(input: {
+  bookingId: string;
+  churchId: string;
+  status: PaymentStatus;
+  reference?: string | null;
+}): Promise<{ ok: boolean; payment_status?: string; error?: string }> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db.rpc("set_payment_status", {
+    p_booking_id: input.bookingId,
+    p_church_id: input.churchId,
+    p_status: input.status,
+    p_reference: input.reference ?? null,
+  });
+  if (error) throw new Error(`setPaymentStatus: ${error.message}`);
+  return data as { ok: boolean; payment_status?: string; error?: string };
+}
+
+/** Load a booking's frozen rental agreement, or null. NOT church-scoped. */
+export async function getRentalAgreement(
+  bookingId: string,
+): Promise<RentalAgreementRow | null> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db
+    .from("rental_agreement")
+    .select("*")
+    .eq("booking_id", bookingId)
+    .maybeSingle();
+  if (error) throw new Error(`getRentalAgreement: ${error.message}`);
+  return (data as RentalAgreementRow | null) ?? null;
 }
 
 export interface SuggestAlternativesInput {
@@ -962,6 +1032,18 @@ export async function getResourceById(resourceId: string): Promise<Resource | nu
     .maybeSingle();
   if (error) throw new Error(`getResourceById: ${error.message}`);
   return (data as Resource | null) ?? null;
+}
+
+/** A single event type by id, or null. NOT church-scoped — callers must check. */
+export async function getEventTypeById(eventTypeId: string): Promise<EventType | null> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db
+    .from("event_type")
+    .select("*")
+    .eq("id", eventTypeId)
+    .maybeSingle();
+  if (error) throw new Error(`getEventTypeById: ${error.message}`);
+  return (data as EventType | null) ?? null;
 }
 
 // ── AI quota (Phase 4) ──────────────────────────────────────────────────────

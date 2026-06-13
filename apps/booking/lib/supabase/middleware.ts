@@ -12,10 +12,20 @@ const AUTH_PREFIXES = ["/sign-in", "/sign-up"];
  *   - `/api/public/*`  — slug-scoped public API (rentals + slots)
  *   - `/r/`            — renter status page (magic-link token IS the auth)
  *   - `/leie/`         — public rental landing scoped by church slug
- * Each enforces its own church-scoping server-side (verified slug / token); the
- * middleware just declines to redirect them to /sign-in. Keep this list tight.
+ * Phase 5 adds the payment callback:
+ *   - `/api/payments/vipps/callback` — Vipps webhook (no session; the embedded
+ *     reference + provider status confirmation is the authorization).
+ * Each enforces its own church-scoping server-side (verified slug / token /
+ * reference); the middleware just declines to redirect them to /sign-in. Keep
+ * this list tight.
  */
-const PUBLIC_PREFIXES = ["/auth/callback", "/api/public", "/r/", "/leie/"];
+const PUBLIC_PREFIXES = [
+  "/auth/callback",
+  "/api/public",
+  "/r/",
+  "/leie/",
+  "/api/payments/vipps/callback",
+];
 
 /** Refresh the session cookie and gate app routes behind auth. */
 export async function updateSession(request: NextRequest) {

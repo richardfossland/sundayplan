@@ -37,7 +37,7 @@ export async function mintBookingStatusToken(
 }
 
 export type VerifiedBookingToken =
-  | { ok: true; bookingId: string; churchId: string }
+  | { ok: true; bookingId: string; churchId: string; jti: string }
   | { ok: false; error: BookingTokenError };
 
 /** Verify a renter status token; pure crypto, no DB. */
@@ -55,7 +55,12 @@ export async function verifyBookingStatusToken(
           : "invalid";
     return { ok: false, error };
   }
-  return { ok: true, bookingId: res.claims.booking_id, churchId: res.claims.church_id };
+  return {
+    ok: true,
+    bookingId: res.claims.booking_id,
+    churchId: res.claims.church_id,
+    jti: res.claims.jti,
+  };
 }
 
 /** Absolute renter-status URL (`/r/<token>`), mirroring SundayPlan's RSVP route. */

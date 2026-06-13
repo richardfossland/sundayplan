@@ -8,6 +8,7 @@
 import type { Metadata } from "next";
 import { loadRenterContext, type LoadError } from "./actions";
 import { RenterStatus } from "@/components/renter-status";
+import { RentalAgreementPanel } from "@/components/rental-agreement-panel";
 import { translate, type Locale } from "@/lib/i18n/messages";
 
 export const dynamic = "force-dynamic";
@@ -63,10 +64,14 @@ function fmtWhen(iso: string, locale: Locale): string {
 
 export default async function RenterStatusPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { token: rawToken } = await params;
+  const sp = await searchParams;
+  const stubReturn = sp.stub === "1";
   const token = safeDecode(rawToken);
   const result = await loadRenterContext(token);
 
@@ -106,6 +111,18 @@ export default async function RenterStatusPage({
           cancellable={c.cancellable}
           locale={locale}
         />
+
+        {c.agreement_html ? (
+          <RentalAgreementPanel
+            token={token}
+            agreementHtml={c.agreement_html}
+            initiallyAccepted={c.agreement_accepted}
+            depositPending={c.deposit_pending}
+            paymentPaid={c.payment_status === "deposit_paid" || c.payment_status === "paid"}
+            locale={locale}
+            stubReturn={stubReturn}
+          />
+        ) : null}
 
         {c.terms ? (
           <div className="rounded-xl border border-white/[0.07] bg-ink-900/40 px-4 py-3">

@@ -250,4 +250,115 @@ begin
   raise notice 'PASS(8): signage view + board show only flagged approved bookings with now/next';
 end $$;
 
+-- ── Assertion 9: rental monetization (migration 0024) ─────────────────────────
+do $$
+declare
+  v_church uuid;
+  v_room   uuid;
+  v_bk     uuid;
+  res      jsonb;
+  r        jsonb;
+  v_acc    timestamptz;
+begin
+  insert into public.church (name, slug) values ('Leiekirken', 'leiekirken') returning id into v_church;
+
+  -- A priced, public room with a deposit % and cancellation policy.
+  insert into booking.resource (church_id, kind, name, requires_approval,
+                                rental_price_nok, deposit_pct, cancellation_policy)
+    values (v_church, 'room', 'Festsalen', false, 2500.00, 20,
+            'Gratis avbestilling inntil 14 dager før.')
+    returning id into v_room;
+
+  -- Booking lands approved (requires_approval=false); payment_status defaults 'none'.
+  res := booking.request_booking(v_church, array[v_room], null, 'Bryllup — Kari',
+           '2026-08-01 12:00+00', '2026-08-01 18:00+00', 0, 0, null, 'Kari', 'kari@test.no');
+  if not (res->>'ok')::boolean then
+    raise exception 'FAIL(9a): rental booking not created: %', res;
+  end if;
+  v_bk := (res->>'booking_id')::uuid;
+  if (select payment_status from booking.booking where id = v_bk) <> 'none' then
+    raise exception 'FAIL(9b): payment_status default is not none';
+  end if;
+
+  -- capture_rental_agreement freezes a snapshot + html.
+  r := booking.capture_rental_agreement(
+         v_bk, v_church,
+         jsonb_build_object('price_nok', 2500, 'deposit_pct', 20),
+         '<html>Leieavtale</html>');
+  if not (r->>'ok')::boolean then
+    raise exception 'FAIL(9c): capture_rental_agreement failed: %', r;
+  end if;
+  if (select count(*) from booking.rental_agreement where booking_id = v_bk) <> 1 then
+    raise exception 'FAIL(9d): rental_agreement row not created';
+  end if;
+
+  -- Re-capture before acceptance updates the snapshot (idempotent path).
+  r := booking.capture_rental_agreement(
+         v_bk, v_church, jsonb_build_object('price_nok', 2500, 'v', 2), '<html>v2</html>');
+  if (select agreement_html from booking.rental_agreement where booking_id = v_bk) <> '<html>v2</html>' then
+    raise exception 'FAIL(9e): re-capture did not update html before acceptance';
+  end if;
+
+  -- set_payment_status flips to deposit_pending + records reference.
+  r := booking.set_payment_status(v_bk, v_church, 'deposit_pending', 'stub-ref-1');
+  if not (r->>'ok')::boolean then
+    raise exception 'FAIL(9f): set_payment_status failed: %', r;
+  end if;
+  if (select payment_status from booking.booking where id = v_bk) <> 'deposit_pending'
+     or (select payment_reference from booking.booking where id = v_bk) <> 'stub-ref-1' then
+    raise exception 'FAIL(9g): payment_status / reference not set';
+  end if;
+
+  -- Invalid payment status is rejected by the RPC (and the column check).
+  r := booking.set_payment_status(v_bk, v_church, 'bananas');
+  if (r->>'ok')::boolean then
+    raise exception 'FAIL(9h): invalid payment status accepted';
+  end if;
+
+  -- accept_rental_agreement records acceptance + jti once.
+  r := booking.accept_rental_agreement(v_bk, v_church, 'jti-abc');
+  if not (r->>'ok')::boolean or (r->>'already')::boolean then
+    raise exception 'FAIL(9i): first acceptance not recorded: %', r;
+  end if;
+  select accepted_at into v_acc from booking.rental_agreement where booking_id = v_bk;
+  if v_acc is null then
+    raise exception 'FAIL(9j): accepted_at not set';
+  end if;
+  if (select accepted_token_jti from booking.rental_agreement where booking_id = v_bk) <> 'jti-abc' then
+    raise exception 'FAIL(9k): accepted_token_jti not recorded';
+  end if;
+
+  -- Re-acceptance is idempotent (already=true) and does NOT change accepted_at.
+  r := booking.accept_rental_agreement(v_bk, v_church, 'jti-other');
+  if not (r->>'ok')::boolean or not (r->>'already')::boolean then
+    raise exception 'FAIL(9l): re-acceptance not idempotent: %', r;
+  end if;
+  if (select accepted_token_jti from booking.rental_agreement where booking_id = v_bk) <> 'jti-abc' then
+    raise exception 'FAIL(9m): re-acceptance overwrote the jti';
+  end if;
+
+  -- Re-capture AFTER acceptance must NOT clobber the frozen agreement html.
+  r := booking.capture_rental_agreement(v_bk, v_church, jsonb_build_object('v', 3), '<html>v3</html>');
+  if (select agreement_html from booking.rental_agreement where booking_id = v_bk) <> '<html>v2</html>' then
+    raise exception 'FAIL(9n): re-capture overwrote an accepted agreement';
+  end if;
+
+  -- Refund flow.
+  r := booking.set_payment_status(v_bk, v_church, 'refunded');
+  if (select payment_status from booking.booking where id = v_bk) <> 'refunded' then
+    raise exception 'FAIL(9o): refund not applied';
+  end if;
+
+  -- deposit_pct range check rejects > 100.
+  begin
+    insert into booking.resource (church_id, kind, name, deposit_pct)
+      values (v_church, 'room', 'Ulovlig', 150);
+    raise exception 'FAIL(9p): deposit_pct > 100 was accepted';
+  exception when check_violation then
+    null;  -- expected
+  end;
+
+  raise notice 'PASS(9): rental fields + agreement snapshot/acceptance + payment_status lifecycle';
+end $$;
+
 select 'ALL BOOKING-LOGIC TESTS PASSED' as result;

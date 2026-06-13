@@ -189,6 +189,22 @@ const en: Record<string, string> = {
   "renter.err.missingSecret.title": "Temporarily unavailable",
   "renter.err.missingSecret.body": "The service isn't configured yet. Please try again later.",
 
+  // Rental agreement + payment (Phase 5)
+  "agreement.title": "Rental agreement",
+  "agreement.show": "Show rental agreement",
+  "agreement.hide": "Hide rental agreement",
+  "agreement.accept": "I accept the terms",
+  "agreement.accepting": "Recording …",
+  "agreement.accepted": "You have accepted the terms.",
+  "agreement.acceptFailed": "Couldn't record acceptance. Please try again.",
+  "agreement.acceptFirst": "Accept the terms before paying.",
+  "pay.deposit": "Pay deposit with Vipps",
+  "pay.depositPaid": "Deposit paid.",
+  "pay.starting": "Opening Vipps …",
+  "pay.failed": "Couldn't start the payment. Please try again.",
+  "pay.stubNotice": "Test mode: real Vipps payment needs merchant keys.",
+  "pay.statusPending": "Deposit awaiting payment.",
+
   // Availability windows
   "avail.manage": "Manage availability",
   "avail.hide": "Hide availability",

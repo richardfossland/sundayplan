@@ -7,6 +7,12 @@
 export type ResourceKind = "room" | "equipment" | "person" | "vehicle";
 export type BookableBy = "staff" | "members" | "public";
 export type BookingStatus = "pending" | "approved" | "declined" | "cancelled";
+export type PaymentStatus =
+  | "none"
+  | "deposit_pending"
+  | "deposit_paid"
+  | "paid"
+  | "refunded";
 
 export interface Resource {
   id: string;
@@ -23,6 +29,10 @@ export interface Resource {
   requires_approval: boolean;
   member_id: string | null;
   status: string;
+  /** Rental monetization (migration 0024). */
+  rental_price_nok: number | null;
+  deposit_pct: number | null;
+  cancellation_policy: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -37,6 +47,10 @@ export interface EventType {
   color: string | null;
   requires_approval: boolean;
   terms: string | null;
+  /** Rental monetization (migration 0024). */
+  rental_price_nok: number | null;
+  deposit_pct: number | null;
+  cancellation_policy: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -60,6 +74,22 @@ export interface Booking {
   renter_contact: string | null;
   show_on_signage: boolean;
   notes: string | null;
+  /** Rental payment lifecycle (migration 0024). */
+  payment_status: PaymentStatus;
+  payment_reference: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A frozen rental agreement (booking.rental_agreement, migration 0024). */
+export interface RentalAgreementRow {
+  id: string;
+  booking_id: string;
+  church_id: string;
+  snapshot: Record<string, unknown>;
+  agreement_html: string;
+  accepted_at: string | null;
+  accepted_token_jti: string | null;
   created_at: string;
   updated_at: string;
 }

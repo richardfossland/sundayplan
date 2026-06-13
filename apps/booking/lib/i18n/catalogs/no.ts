@@ -189,6 +189,22 @@ const no: Record<string, string> = {
   "renter.err.missingSecret.title": "Midlertidig utilgjengelig",
   "renter.err.missingSecret.body": "Tjenesten er ikke konfigurert ennå. Prøv igjen senere.",
 
+  // Rental agreement + payment (Phase 5)
+  "agreement.title": "Leieavtale",
+  "agreement.show": "Vis leieavtale",
+  "agreement.hide": "Skjul leieavtale",
+  "agreement.accept": "Jeg godtar vilkårene",
+  "agreement.accepting": "Registrerer …",
+  "agreement.accepted": "Du har godtatt vilkårene.",
+  "agreement.acceptFailed": "Kunne ikke registrere aksept. Prøv igjen.",
+  "agreement.acceptFirst": "Godta vilkårene før du betaler.",
+  "pay.deposit": "Betal depositum med Vipps",
+  "pay.depositPaid": "Depositum betalt.",
+  "pay.starting": "Åpner Vipps …",
+  "pay.failed": "Betalingen kunne ikke startes. Prøv igjen.",
+  "pay.stubNotice": "Testmodus: ekte Vipps-betaling krever forhandlernøkler.",
+  "pay.statusPending": "Depositum venter på betaling.",
+
   // Availability windows
   "avail.manage": "Administrer ledige tider",
   "avail.hide": "Skjul ledige tider",

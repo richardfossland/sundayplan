@@ -21,6 +21,7 @@ import {
 } from "@/lib/data/booking";
 import { hasMagicLinkSecret, mintBookingStatusToken } from "@/lib/booking-link";
 import { notifyPlannersOfRequest, sendBookingComms } from "@/lib/comms";
+import { startRentalMonetization } from "@/lib/rental-flow";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +99,27 @@ export async function POST(
     token = await mintBookingStatusToken(result.booking_id, churchId);
     statusUrl = `/r/${encodeURIComponent(token)}`;
   }
+
+  // Rental monetization (Phase 5): freeze the agreement snapshot + (if priced)
+  // create the deposit intent through the Vipps seam (stub by default). The
+  // renter's status page is the payment return URL. Best-effort: never blocks
+  // the response. A priced resource flips payment_status → deposit_pending.
+  const origin = new URL(req.url).origin;
+  const returnUrl = statusUrl ? `${origin}${statusUrl}` : null;
+  void startRentalMonetization({
+    bookingId: result.booking_id,
+    churchId,
+    resourceId,
+    eventTypeId: typeof body.eventTypeId === "string" ? body.eventTypeId : null,
+    renterName,
+    renterContact,
+    startsAtUtc: starts,
+    endsAtUtc: ends,
+    returnUrl,
+  }).catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error("[booking:rental] monetization failed", err);
+  });
 
   // Comms (best-effort): confirm to the renter + notify planners on pending.
   void fireRentalComms(churchId, result.booking_id, resource.name, result.status).catch(

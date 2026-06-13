@@ -12,16 +12,21 @@
  */
 "use server";
 
-import { verifyBookingStatusToken, type BookingTokenError } from "@/lib/booking-link";
+import { appBaseUrl, verifyBookingStatusToken, type BookingTokenError } from "@/lib/booking-link";
 import {
+  acceptRentalAgreement,
   cancelBooking,
   getBookingById,
   getChurchName,
+  getRentalAgreement,
   listBookingResources,
   listResources,
+  setPaymentStatus,
 } from "@/lib/data/booking";
+import { createPaymentProvider } from "@/lib/payments";
+import type { RentalSnapshot } from "@/lib/rental-agreement";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/messages";
-import type { BookingStatus } from "@/src/types/booking";
+import type { BookingStatus, PaymentStatus } from "@/src/types/booking";
 
 export type LoadError = BookingTokenError | "not_found";
 
@@ -37,6 +42,14 @@ export interface RenterContext {
   /** Only pending requests can be cancelled by the renter. */
   cancellable: boolean;
   locale: Locale;
+  /** Rental monetization (Phase 5). */
+  payment_status: PaymentStatus;
+  /** The frozen agreement HTML, if one was captured. */
+  agreement_html: string | null;
+  /** True once the renter has e-accepted the agreement. */
+  agreement_accepted: boolean;
+  /** True when a deposit is owed (priced + not yet paid). */
+  deposit_pending: boolean;
 }
 
 export type LoadResult =
@@ -53,10 +66,11 @@ export async function loadRenterContext(token: string): Promise<LoadResult> {
     return { ok: false, error: "not_found" };
   }
 
-  const [churchName, resources, brMap] = await Promise.all([
+  const [churchName, resources, brMap, agreement] = await Promise.all([
     getChurchName(v.churchId),
     listResources(v.churchId),
     listBookingResources([booking.id]),
+    getRentalAgreement(booking.id),
   ]);
   const primaryId = brMap[booking.id]?.[0];
   const facility = resources.find((r) => r.id === primaryId)?.name ?? booking.title;
@@ -77,6 +91,10 @@ export async function loadRenterContext(token: string): Promise<LoadResult> {
       terms: null,
       cancellable: booking.status === "pending",
       locale,
+      payment_status: booking.payment_status,
+      agreement_html: agreement?.agreement_html ?? null,
+      agreement_accepted: Boolean(agreement?.accepted_at),
+      deposit_pending: booking.payment_status === "deposit_pending",
     },
   };
 }
@@ -105,4 +123,93 @@ export async function cancelRenterBooking(token: string): Promise<CancelResult> 
   const result = await cancelBooking(booking.id, booking.id);
   if (!result.ok) return { ok: false, error: "failed" };
   return { ok: true, status: result.status };
+}
+
+// ── Rental e-acceptance + deposit payment (Phase 5) ───────────────────────────
+
+export type AcceptResult =
+  | { ok: true; already: boolean }
+  | { ok: false; error: LoadError | "failed" };
+
+/**
+ * Record the renter's cryptographic e-acceptance of the frozen agreement. The
+ * status-token's jti (verified, never from the URL) is stored as the acceptance
+ * marker — a simple token-bound signature standing in for a wet signature.
+ * (Full BankID / qualified e-sign is a noted future upgrade.)
+ */
+export async function acceptAgreement(token: string): Promise<AcceptResult> {
+  const v = await verifyBookingStatusToken(token);
+  if (!v.ok) return { ok: false, error: v.error };
+
+  const booking = await getBookingById(v.bookingId);
+  if (!booking || booking.church_id !== v.churchId) {
+    return { ok: false, error: "not_found" };
+  }
+  const res = await acceptRentalAgreement({
+    bookingId: booking.id,
+    churchId: booking.church_id,
+    tokenJti: v.jti,
+  });
+  if (!res.ok) return { ok: false, error: "failed" };
+  return { ok: true, already: Boolean(res.already) };
+}
+
+export type PayResult =
+  | { ok: true; redirectUrl: string; usedStub: boolean }
+  | { ok: false; error: LoadError | "no_deposit" | "failed" };
+
+/**
+ * Start (or resume) the deposit payment via the Vipps seam. Returns a redirect
+ * URL the client sends the renter to. With no merchant creds the keyless stub
+ * returns a fake URL pointing back at this page's stub callback, so the local
+ * flow completes end-to-end. Re-derives the amount from the FROZEN snapshot.
+ */
+export async function payDeposit(token: string): Promise<PayResult> {
+  const v = await verifyBookingStatusToken(token);
+  if (!v.ok) return { ok: false, error: v.error };
+
+  const booking = await getBookingById(v.bookingId);
+  if (!booking || booking.church_id !== v.churchId) {
+    return { ok: false, error: "not_found" };
+  }
+
+  const agreement = await getRentalAgreement(booking.id);
+  const snap = (agreement?.snapshot ?? {}) as Partial<RentalSnapshot>;
+  const price = snap.price_nok ?? 0;
+  const pct = snap.deposit_pct ?? 0;
+  const depositNok = Math.round((price ?? 0) * ((pct ?? 0) / 100) * 100) / 100;
+  if (depositNok <= 0) return { ok: false, error: "no_deposit" };
+
+  const provider = createPaymentProvider(process.env as Record<string, string | undefined>);
+  const origin = appBaseUrl().replace(/\/+$/, "");
+  const intent = await provider.createPayment({
+    amountNok: depositNok,
+    reference: `booking:${booking.id}:deposit`,
+    returnUrl: `${origin}/r/${encodeURIComponent(token)}`,
+    description: `Depositum ${booking.title}`,
+  });
+  if (!intent.ok) return { ok: false, error: "failed" };
+  return { ok: true, redirectUrl: intent.redirectUrl, usedStub: intent.provider === "stub" };
+}
+
+/**
+ * Stub-safe deposit completion — invoked when the renter returns to this page
+ * with `?stub=1` from the StubVippsProvider redirect. Flips deposit_pending →
+ * deposit_paid. No-op (and safe) when there is nothing pending. With real Vipps
+ * this is handled by the webhook callback instead; the stub uses this path so
+ * the local flow needs no inbound webhook.
+ */
+export async function completeStubDeposit(token: string): Promise<{ ok: boolean }> {
+  const v = await verifyBookingStatusToken(token);
+  if (!v.ok) return { ok: false };
+  const booking = await getBookingById(v.bookingId);
+  if (!booking || booking.church_id !== v.churchId) return { ok: false };
+  if (booking.payment_status !== "deposit_pending") return { ok: true };
+  await setPaymentStatus({
+    bookingId: booking.id,
+    churchId: booking.church_id,
+    status: "deposit_paid",
+    reference: booking.payment_reference,
+  });
+  return { ok: true };
 }

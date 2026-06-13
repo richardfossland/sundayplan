@@ -7,8 +7,11 @@ import {
   signChurchInvite,
   verifyChurchInvite,
   buildInviteLink,
+  signBookingStatus,
+  verifyBookingStatus,
   type IssueOptions,
   type InviteIssueOptions,
+  type BookingStatusIssueOptions,
 } from "./magic-link";
 
 const SECRET = "test-magic-link-secret-please-rotate";
@@ -188,6 +191,69 @@ describe("signChurchInvite / verifyChurchInvite", () => {
       expect(res.claims.purpose).toBe("church_invite");
       expect(res.claims.assignment_id).toBeUndefined();
     }
+  });
+});
+
+function bookingOpts(
+  overrides: Partial<BookingStatusIssueOptions> = {},
+): BookingStatusIssueOptions {
+  return {
+    booking_id: "44444444-4444-4444-8444-444444444444",
+    church_id: "22222222-2222-4222-8222-222222222222",
+    ttl_seconds: 60 * 60 * 24 * 30,
+    now: 1_700_000_000,
+    ...overrides,
+  };
+}
+
+describe("signBookingStatus / verifyBookingStatus", () => {
+  it("round-trips and preserves booking + church + purpose", async () => {
+    const token = await signBookingStatus(bookingOpts({ jti: "fixed-booking-jti" }), SECRET);
+    const res = await verifyBookingStatus(token, SECRET, 1_700_000_000);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.claims.booking_id).toBe("44444444-4444-4444-8444-444444444444");
+    expect(res.claims.church_id).toBe("22222222-2222-4222-8222-222222222222");
+    expect(res.claims.purpose).toBe("booking_status");
+    expect(res.claims.jti).toBe("fixed-booking-jti");
+    expect(res.claims.exp).toBe(1_700_000_000 + 60 * 60 * 24 * 30);
+  });
+
+  it("rejects a token signed with a different secret", async () => {
+    const token = await signBookingStatus(bookingOpts(), SECRET);
+    expect(await verifyBookingStatus(token, "other", 1_700_000_000)).toEqual({
+      ok: false,
+      reason: "bad_signature",
+    });
+  });
+
+  it("rejects an expired booking token", async () => {
+    const token = await signBookingStatus(bookingOpts({ now: 1000, ttl_seconds: 60 }), SECRET);
+    expect(await verifyBookingStatus(token, SECRET, 2000)).toEqual({ ok: false, reason: "expired" });
+  });
+
+  it("refuses a volunteer RSVP token (cross-token confusion)", async () => {
+    const rsvp = await signMagicLink(opts(), SECRET);
+    expect(await verifyBookingStatus(rsvp, SECRET, 1_700_000_000)).toEqual({
+      ok: false,
+      reason: "wrong_purpose",
+    });
+  });
+
+  it("refuses a church-invite token", async () => {
+    const invite = await signChurchInvite(inviteOpts(), SECRET);
+    expect(await verifyBookingStatus(invite, SECRET, 1_700_000_000)).toEqual({
+      ok: false,
+      reason: "wrong_purpose",
+    });
+  });
+
+  it("and conversely: a booking token is not a valid RSVP token", async () => {
+    const booking = await signBookingStatus(bookingOpts(), SECRET);
+    expect(await verifyMagicLink(booking, SECRET, 1_700_000_000)).toEqual({
+      ok: false,
+      reason: "wrong_purpose",
+    });
   });
 });
 

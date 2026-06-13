@@ -18,6 +18,61 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  apps/booking:
+    dependencies:
+      '@opennextjs/cloudflare':
+        specifier: ^1.19.11
+        version: 1.19.11(next@15.5.18(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(wrangler@4.99.0)
+      '@sundayplan/auth':
+        specifier: workspace:*
+        version: link:../../packages/auth
+      '@sundayplan/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@sundayplan/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@supabase/ssr':
+        specifier: ^0.10.3
+        version: 0.10.3(@supabase/supabase-js@2.106.2)
+      '@supabase/supabase-js':
+        specifier: ^2.106.2
+        version: 2.106.2
+      lucide-react:
+        specifier: ^1.17.0
+        version: 1.17.0(react@19.2.6)
+      next:
+        specifier: ^15.5.0
+        version: 15.5.18(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      react:
+        specifier: ^19.1.0
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.2.6(react@19.2.6)
+    devDependencies:
+      '@tailwindcss/postcss':
+        specifier: ^4.1.0
+        version: 4.3.0
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.19
+      '@types/react':
+        specifier: ^19.1.0
+        version: 19.2.15
+      '@types/react-dom':
+        specifier: ^19.1.0
+        version: 19.2.3(@types/react@19.2.15)
+      tailwindcss:
+        specifier: ^4.1.0
+        version: 4.3.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.7
+        version: 4.1.7(@types/node@22.19.19)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.27.3)(jiti@2.7.0)(terser@5.16.9)(yaml@2.9.0))
+
   apps/mobile:
     dependencies:
       '@sundayplan/sdk':

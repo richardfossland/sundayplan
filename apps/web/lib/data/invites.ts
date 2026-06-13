@@ -131,7 +131,9 @@ async function inviteRow(token: string) {
 export async function loadInviteContext(token: string): Promise<InviteLoadResult> {
   if (!process.env.MAGICLINK_SECRET) return { ok: false, error: "missing_secret" };
 
-  const res = await verifyChurchInvite(token, magicLinkSecret());
+  // During a secret rotation, also accept the previous secret (current first).
+  const previous = process.env.MAGICLINK_SECRET_PREVIOUS;
+  const res = await verifyChurchInvite(token, previous ? [magicLinkSecret(), previous] : magicLinkSecret());
   if (!res.ok) {
     if (res.reason === "expired") return { ok: false, error: "expired" };
     if (res.reason === "wrong_purpose") return { ok: false, error: "wrong_purpose" };

@@ -316,6 +316,51 @@ describe("invite join bounce-back flow", () => {
   });
 });
 
+describe("secret rotation (verify accepts a secret set)", () => {
+  const NEW = "the-current-magic-link-secret";
+  const OLD = "the-previous-magic-link-secret";
+  const NOW = 1_700_000_000;
+
+  it("verifies a token signed with the PREVIOUS secret while [new, old] overlap", async () => {
+    const token = await signMagicLink(opts(), OLD);
+    // New secret alone rejects it...
+    expect((await verifyMagicLink(token, NEW, NOW)).ok).toBe(false);
+    // ...but the overlapping set still accepts it (zero-downtime rotation).
+    const res = await verifyMagicLink(token, [NEW, OLD], NOW);
+    expect(res.ok).toBe(true);
+  });
+
+  it("verifies a token signed with the CURRENT secret given the same set", async () => {
+    const token = await signMagicLink(opts(), NEW);
+    const res = await verifyMagicLink(token, [NEW, OLD], NOW);
+    expect(res.ok).toBe(true);
+  });
+
+  it("rejects a token whose secret is in NEITHER slot", async () => {
+    const token = await signMagicLink(opts(), "a-retired-and-dropped-secret");
+    const res = await verifyMagicLink(token, [NEW, OLD], NOW);
+    expect(res).toEqual({ ok: false, reason: "bad_signature" });
+  });
+
+  it("still reports malformed (not bad_signature) for a non-JWT with a secret set", async () => {
+    expect(await verifyMagicLink("not-a-jwt", [NEW, OLD])).toEqual({ ok: false, reason: "malformed" });
+  });
+
+  it("applies to church-invite and booking-status families too", async () => {
+    const invite = await signChurchInvite(
+      { church_id: "22222222-2222-4222-8222-222222222222", role: "planner", ttl_seconds: 3600, now: NOW },
+      OLD,
+    );
+    expect((await verifyChurchInvite(invite, [NEW, OLD], NOW)).ok).toBe(true);
+
+    const booking = await signBookingStatus(
+      { booking_id: "44444444-4444-4444-8444-444444444444", church_id: "22222222-2222-4222-8222-222222222222", ttl_seconds: 3600, now: NOW },
+      OLD,
+    );
+    expect((await verifyBookingStatus(booking, [NEW, OLD], NOW)).ok).toBe(true);
+  });
+});
+
 describe("tokenHash", () => {
   it("computes the SHA-256 hex (matches the known vector for 'abc')", async () => {
     expect(await tokenHash("abc")).toBe(

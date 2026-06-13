@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge, Button, Card, Field, Input, Select } from "@/components/ui";
 import { useT } from "@/lib/i18n/client";
 import type {
+  Availability,
   BookableBy,
   EventType,
   Resource,
@@ -265,25 +266,28 @@ function ResourcesTab({
           {resources.map((r) => (
             <li
               key={r.id}
-              className="flex items-center justify-between rounded-lg border border-white/[0.07] bg-ink-900/50 px-4 py-3"
+              className="rounded-lg border border-white/[0.07] bg-ink-900/50 px-4 py-3"
             >
-              <div className="flex items-center gap-3">
-                <span
-                  className="h-3 w-3 rounded-full"
-                  style={{ background: r.color ?? "#6366f1" }}
-                />
-                <div>
-                  <span className="font-medium text-ink-100">{r.name}</span>
-                  <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-500">
-                    <span>{t(`res.kind.${r.kind}`)}</span>
-                    {r.site ? <span>· {r.site}</span> : null}
-                    {r.requires_approval ? <Badge tone="gold">⚑</Badge> : null}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span
+                    className="h-3 w-3 rounded-full"
+                    style={{ background: r.color ?? "#6366f1" }}
+                  />
+                  <div>
+                    <span className="font-medium text-ink-100">{r.name}</span>
+                    <div className="mt-0.5 flex items-center gap-2 text-xs text-ink-500">
+                      <span>{t(`res.kind.${r.kind}`)}</span>
+                      {r.site ? <span>· {r.site}</span> : null}
+                      {r.requires_approval ? <Badge tone="gold">⚑</Badge> : null}
+                    </div>
                   </div>
                 </div>
+                <Button variant="ghost" onClick={() => startEdit(r)}>
+                  {t("res.edit")}
+                </Button>
               </div>
-              <Button variant="ghost" onClick={() => startEdit(r)}>
-                {t("res.edit")}
-              </Button>
+              {r.kind === "person" ? <AvailabilityEditor resourceId={r.id} /> : null}
             </li>
           ))}
         </ul>
@@ -634,6 +638,134 @@ function BundlesTab({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+// ── Availability windows (person resources) ────────────────────────────────────
+
+const WEEKDAY_KEYS = [
+  "avail.day.sun",
+  "avail.day.mon",
+  "avail.day.tue",
+  "avail.day.wed",
+  "avail.day.thu",
+  "avail.day.fri",
+  "avail.day.sat",
+] as const;
+
+/**
+ * CRUD for a person resource's weekly bookable windows (used to derive
+ * appointment slots). Minimal but typechecked: list + add + delete, scoped
+ * server-side to the resource's church.
+ */
+function AvailabilityEditor({ resourceId }: { resourceId: string }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const [windows, setWindows] = useState<Availability[]>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [weekday, setWeekday] = useState(1);
+  const [startTime, setStartTime] = useState("09:00");
+  const [endTime, setEndTime] = useState("12:00");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!open || loaded) return;
+    fetch(`/api/availability?resourceId=${encodeURIComponent(resourceId)}`)
+      .then((r) => (r.ok ? r.json() : { windows: [] }))
+      .then((d: { windows?: Availability[] }) => {
+        setWindows(d.windows ?? []);
+        setLoaded(true);
+      })
+      .catch(() => setLoaded(true));
+  }, [open, loaded, resourceId]);
+
+  async function add() {
+    if (endTime <= startTime) return;
+    setBusy(true);
+    try {
+      const res = await fetch("/api/availability", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ resourceId, weekday, startTime, endTime }),
+      });
+      if (!res.ok) return;
+      const { window } = (await res.json()) as { window: Availability };
+      setWindows((prev) =>
+        [...prev, window].sort(
+          (a, b) => a.weekday - b.weekday || a.start_time.localeCompare(b.start_time),
+        ),
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    const res = await fetch("/api/availability", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    if (res.ok) setWindows((prev) => prev.filter((w) => w.id !== id));
+  }
+
+  return (
+    <div className="mt-3 border-t border-white/[0.06] pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-xs font-medium text-royal-300 hover:text-royal-200"
+      >
+        {open ? t("avail.hide") : t("avail.manage")}
+      </button>
+      {open ? (
+        <div className="mt-3 space-y-3">
+          {windows.length === 0 ? (
+            <p className="text-xs text-ink-500">{t("avail.empty")}</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {windows.map((w) => (
+                <li
+                  key={w.id}
+                  className="flex items-center justify-between rounded-md bg-ink-950/40 px-2.5 py-1.5 text-xs text-ink-300"
+                >
+                  <span>
+                    {t(WEEKDAY_KEYS[w.weekday])} {w.start_time.slice(0, 5)}–{w.end_time.slice(0, 5)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => remove(w.id)}
+                    className="text-[color:var(--color-danger)] hover:underline"
+                  >
+                    {t("bundle.delete")}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="grid grid-cols-3 gap-2">
+            <Field label={t("avail.weekday")}>
+              <Select value={weekday} onChange={(e) => setWeekday(Number(e.target.value))}>
+                {WEEKDAY_KEYS.map((k, i) => (
+                  <option key={k} value={i}>
+                    {t(k)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label={t("avail.start")}>
+              <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
+            </Field>
+            <Field label={t("avail.end")}>
+              <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
+            </Field>
+          </div>
+          <Button onClick={add} disabled={busy || endTime <= startTime}>
+            {t("avail.add")}
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

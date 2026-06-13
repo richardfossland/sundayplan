@@ -186,6 +186,94 @@ export function buildInviteLink(baseUrl: string, token: string): string {
   return `${origin}/r/${encodeURIComponent(token)}/join`;
 }
 
+// ── Booking-status tokens (SundayBooking, no-account renters) ────────────────
+// A third token family, modelled on the church-invite variant: it carries NO
+// member_id (an external renter has no `member` row). It authorizes a renter to
+// view + cancel the ONE pending booking named in the claim. Same HS256/secret/
+// hashing machinery so single-use + expiry tracking is identical, but the claim
+// is scoped to a booking_id + church_id rather than an assignment/member.
+
+export interface BookingStatusClaims {
+  booking_id: string;
+  church_id: string;
+  purpose: "booking_status";
+  /** unix seconds */
+  exp: number;
+  /** unix seconds */
+  iat: number;
+  /** prevent reuse */
+  jti: string;
+}
+
+export interface BookingStatusIssueOptions {
+  booking_id: string;
+  church_id: string;
+  /** Token lifetime in seconds (e.g. 30 days = 2592000). */
+  ttl_seconds: number;
+  /** Override the issue time (unix seconds) — for tests/determinism. */
+  now?: number;
+  /** Override the nonce — defaults to a random UUID. */
+  jti?: string;
+}
+
+export type VerifyBookingStatusResult =
+  | { ok: true; claims: BookingStatusClaims }
+  | { ok: false; reason: "malformed" | "bad_signature" | "expired" | "wrong_purpose" };
+
+export async function signBookingStatus(
+  opts: BookingStatusIssueOptions,
+  secret: string,
+): Promise<string> {
+  const iat = opts.now ?? nowSeconds();
+  const claims: BookingStatusClaims = {
+    booking_id: opts.booking_id,
+    church_id: opts.church_id,
+    purpose: "booking_status",
+    iat,
+    exp: iat + opts.ttl_seconds,
+    jti: opts.jti ?? crypto.randomUUID(),
+  };
+  const signingInput = `${b64urlString(JSON.stringify(HEADER))}.${b64urlString(JSON.stringify(claims))}`;
+  const sig = await hmac(signingInput, secret);
+  return `${signingInput}.${b64urlBytes(sig)}`;
+}
+
+export async function verifyBookingStatus(
+  token: string,
+  secret: string,
+  now?: number,
+): Promise<VerifyBookingStatusResult> {
+  const parts = token.split(".");
+  if (parts.length !== 3) return { ok: false, reason: "malformed" };
+  const [header, body, sig] = parts;
+  const signingInput = `${header}.${body}`;
+
+  let signatureValid: boolean;
+  try {
+    const key = await hmacKey(secret);
+    signatureValid = await crypto.subtle.verify("HMAC", key, fromB64url(sig), textEncoder.encode(signingInput));
+  } catch {
+    return { ok: false, reason: "malformed" };
+  }
+  if (!signatureValid) return { ok: false, reason: "bad_signature" };
+
+  let claims: BookingStatusClaims;
+  try {
+    claims = JSON.parse(textDecoder.decode(fromB64url(body))) as BookingStatusClaims;
+  } catch {
+    return { ok: false, reason: "malformed" };
+  }
+  // Reject any other token family before trusting booking_id/church_id. A
+  // member RSVP / invite token must never be usable on the renter-status path.
+  if (claims.purpose !== "booking_status" || !claims.booking_id || !claims.church_id) {
+    return { ok: false, reason: "wrong_purpose" };
+  }
+  if (typeof claims.exp !== "number" || claims.exp < (now ?? nowSeconds())) {
+    return { ok: false, reason: "expired" };
+  }
+  return { ok: true, claims };
+}
+
 /**
  * SHA-256 hex of a token. The DB tracks single-use by `magic_link.token_hash`
  * (never the raw token), so issuance stores `tokenHash(token)` and the respond

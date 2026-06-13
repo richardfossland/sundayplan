@@ -11,7 +11,9 @@
  * client — never import it from a client component.
  */
 import { createAdminClient, createBookingAdminClient } from "@/lib/supabase/admin";
+import { freeSlots as deriveFreeSlots, type FreeSlot } from "@/lib/slots";
 import type {
+  Availability,
   Booking,
   BookingResource,
   BundleItem,
@@ -502,6 +504,303 @@ export async function deleteBundle(
     .eq("id", bundleId)
     .eq("church_id", churchId);
   if (error) throw new Error(`deleteBundle: ${error.message}`);
+}
+
+// ── Single-booking read + member's own requests ───────────────────────────────
+
+/** A single booking by id, or null. NOT church-scoped — callers must check. */
+export async function getBookingById(bookingId: string): Promise<Booking | null> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db
+    .from("booking")
+    .select("*")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (error) throw new Error(`getBookingById: ${error.message}`);
+  return (data as Booking | null) ?? null;
+}
+
+/**
+ * The bookings a given auth user requested (their own request history + status).
+ * church_id-scoped to the caller's verified membership.
+ */
+export async function listMyRequests(
+  churchId: string,
+  userId: string,
+): Promise<Booking[]> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db
+    .from("booking")
+    .select("*")
+    .eq("church_id", churchId)
+    .eq("requested_by", userId)
+    .order("starts_at_utc", { ascending: false })
+    .limit(100);
+  if (error) throw new Error(`listMyRequests: ${error.message}`);
+  return (data ?? []) as Booking[];
+}
+
+/** Resources of a church a MEMBER may book (bookable_by in members/public). */
+export async function listMemberBookableResources(
+  churchId: string,
+): Promise<Resource[]> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db
+    .from("resource")
+    .select("*")
+    .eq("church_id", churchId)
+    .eq("status", "active")
+    .in("bookable_by", ["members", "public"])
+    .order("name");
+  if (error) throw new Error(`listMemberBookableResources: ${error.message}`);
+  return (data ?? []) as Resource[];
+}
+
+// ── Public (no-account) reads, resolved from a verified church slug ────────────
+
+export interface PublicChurch {
+  id: string;
+  name: string;
+  slug: string;
+  locale: string;
+}
+
+/**
+ * Resolve a church by its public slug. The ONLY trusted source of church_id on
+ * the public rental path — the slug comes from the URL, we look up the row
+ * server-side, and every downstream read/write uses the resolved id (never a
+ * client-supplied church_id).
+ */
+export async function resolveChurchBySlug(slug: string): Promise<PublicChurch | null> {
+  if (!/^[a-z0-9-]+$/.test(slug)) return null;
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("church")
+    .select("id, name, slug, locale")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) throw new Error(`resolveChurchBySlug: ${error.message}`);
+  return (data as PublicChurch | null) ?? null;
+}
+
+/** Church display name by id (for comms / status pages). */
+export async function getChurchName(churchId: string): Promise<string> {
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("church")
+    .select("name")
+    .eq("id", churchId)
+    .maybeSingle();
+  if (error) throw new Error(`getChurchName: ${error.message}`);
+  return (data?.name as string | undefined) ?? "";
+}
+
+/**
+ * Publicly-bookable resources for a church (bookable_by='public' only). Safe to
+ * expose to anonymous renters — no member-only resources leak.
+ */
+export async function listPublicResources(churchId: string): Promise<Resource[]> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db
+    .from("resource")
+    .select("*")
+    .eq("church_id", churchId)
+    .eq("status", "active")
+    .eq("bookable_by", "public")
+    .order("name");
+  if (error) throw new Error(`listPublicResources: ${error.message}`);
+  return (data ?? []) as Resource[];
+}
+
+/** Event types for a church (used for the public rental purpose picker + terms). */
+export async function listEventTypesPublic(churchId: string): Promise<EventType[]> {
+  return listEventTypes(churchId);
+}
+
+// ── Availability (person/appointment windows) ──────────────────────────────────
+
+/** Availability windows for one resource, ordered weekday then start. */
+export async function listAvailability(
+  resourceId: string,
+): Promise<Availability[]> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db
+    .from("availability")
+    .select("*")
+    .eq("resource_id", resourceId)
+    .order("weekday")
+    .order("start_time");
+  if (error) throw new Error(`listAvailability: ${error.message}`);
+  return (data ?? []) as Availability[];
+}
+
+/** Verify a resource belongs to the church (guards availability CRUD). */
+export async function resourceBelongsToChurch(
+  churchId: string,
+  resourceId: string,
+): Promise<boolean> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db
+    .from("resource")
+    .select("id")
+    .eq("id", resourceId)
+    .eq("church_id", churchId)
+    .maybeSingle();
+  if (error) throw new Error(`resourceBelongsToChurch: ${error.message}`);
+  return Boolean(data);
+}
+
+export async function createAvailability(input: {
+  resourceId: string;
+  weekday: number;
+  startTime: string;
+  endTime: string;
+}): Promise<Availability> {
+  const db = createBookingAdminClient();
+  const { data, error } = await db
+    .from("availability")
+    .insert({
+      resource_id: input.resourceId,
+      weekday: input.weekday,
+      start_time: input.startTime,
+      end_time: input.endTime,
+    })
+    .select("*")
+    .single();
+  if (error) throw new Error(`createAvailability: ${error.message}`);
+  return data as Availability;
+}
+
+/** Delete an availability row, but only if its resource is in the church. */
+export async function deleteAvailability(
+  churchId: string,
+  availabilityId: string,
+): Promise<boolean> {
+  const db = createBookingAdminClient();
+  // Confirm ownership through the parent resource before deleting.
+  const { data: row, error: readErr } = await db
+    .from("availability")
+    .select("id, resource_id")
+    .eq("id", availabilityId)
+    .maybeSingle();
+  if (readErr) throw new Error(`deleteAvailability read: ${readErr.message}`);
+  if (!row) return false;
+  if (!(await resourceBelongsToChurch(churchId, row.resource_id as string))) {
+    return false;
+  }
+  const { error } = await db.from("availability").delete().eq("id", availabilityId);
+  if (error) throw new Error(`deleteAvailability: ${error.message}`);
+  return true;
+}
+
+/**
+ * Server-side free-slot derivation for a `person` resource: read its weekly
+ * availability + approved holds in [from, to), then derive slots via the pure
+ * `freeSlots` core. church_id-scoped via the resource ownership check upstream.
+ */
+export async function computeFreeSlots(input: {
+  resourceId: string;
+  from: string;
+  to: string;
+  slotMinutes: number;
+  now?: string;
+}): Promise<FreeSlot[]> {
+  const db = createBookingAdminClient();
+  const [windows, holds] = await Promise.all([
+    listAvailability(input.resourceId),
+    db
+      .from("booking_resource")
+      .select("blocked_range, status")
+      .eq("resource_id", input.resourceId)
+      .eq("status", "approved"),
+  ]);
+  if (holds.error) throw new Error(`computeFreeSlots: ${holds.error.message}`);
+
+  const busy = (holds.data ?? [])
+    .map((r) => parseTstzRange((r as { blocked_range: string }).blocked_range))
+    .filter((r): r is { startMs: number; endMs: number } => r !== null);
+
+  return deriveFreeSlots({
+    windows: windows.map((w) => ({
+      weekday: w.weekday,
+      start_time: w.start_time,
+      end_time: w.end_time,
+    })),
+    busy,
+    slotMinutes: input.slotMinutes,
+    fromMs: Date.parse(input.from),
+    toMs: Date.parse(input.to),
+    nowMs: input.now ? Date.parse(input.now) : Date.now(),
+  });
+}
+
+/**
+ * Parse a PostgREST-serialized tstzrange like `["2026-06-13 10:00:00+00",...)`
+ * into {startMs,endMs}. Tolerates `[`/`(` and `]`/`)` bounds and quoted parts.
+ */
+export function parseTstzRange(
+  raw: string,
+): { startMs: number; endMs: number } | null {
+  if (!raw) return null;
+  const inner = raw.slice(1, -1); // strip bounds
+  const parts = inner.split(",");
+  if (parts.length !== 2) return null;
+  const clean = (s: string) =>
+    s
+      .trim()
+      .replace(/^"|"$/g, "")
+      .replace(" ", "T")
+      // Postgres serializes the UTC offset as `+00`; normalize to `+00:00`.
+      .replace(/([+-]\d{2})$/, "$1:00");
+  const startMs = Date.parse(clean(parts[0]));
+  const endMs = Date.parse(clean(parts[1]));
+  if (Number.isNaN(startMs) || Number.isNaN(endMs)) return null;
+  return { startMs, endMs };
+}
+
+// ── Reminder seam (compute-only; wiring to a scheduler is deferred) ────────────
+
+export interface BookingReminderTarget {
+  booking_id: string;
+  church_id: string;
+  title: string;
+  starts_at_utc: string;
+  renter_contact: string | null;
+  /** Whole days from `now` to the booking start. */
+  days_until: number;
+}
+
+/**
+ * Pure: given approved bookings + a "now", return those whose start falls on a
+ * reminder day (default: the day before). No DB, no send — a scheduler/cron
+ * would call this then hand the targets to sendBookingComms. Mirrors the SDK's
+ * cadence idea (dueMessages) but for a single per-booking reminder window.
+ */
+export function dueBookingReminders(
+  bookings: Pick<
+    Booking,
+    "id" | "church_id" | "title" | "starts_at_utc" | "renter_contact" | "status"
+  >[],
+  now: Date,
+  reminderDaysBefore: number[] = [1],
+): BookingReminderTarget[] {
+  const MS_PER_DAY = 86_400_000;
+  const want = new Set(reminderDaysBefore);
+  const out: BookingReminderTarget[] = [];
+  for (const b of bookings) {
+    if (b.status !== "approved") continue;
+    const daysUntil = Math.floor((Date.parse(b.starts_at_utc) - now.getTime()) / MS_PER_DAY);
+    if (daysUntil < 0 || !want.has(daysUntil)) continue;
+    out.push({
+      booking_id: b.id,
+      church_id: b.church_id,
+      title: b.title,
+      starts_at_utc: b.starts_at_utc,
+      renter_contact: b.renter_contact,
+      days_until: daysUntil,
+    });
+  }
+  return out;
 }
 
 /**

@@ -8,5 +8,5 @@ export async function POST(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  return handleBookingMutation(params, declineBooking);
+  return handleBookingMutation(params, declineBooking, "booking_declined");
 }

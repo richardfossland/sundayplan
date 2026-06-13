@@ -9,12 +9,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireMember } from "@/lib/auth-guard";
 import {
+  getBookingById,
+  getChurchName,
   listBookingResources,
   listBookings,
+  listResources,
   listServices,
   requestBooking,
   resolveBundleResources,
 } from "@/lib/data/booking";
+import { notifyPlannersOfRequest, sendBookingComms } from "@/lib/comms";
 
 export const dynamic = "force-dynamic";
 
@@ -95,8 +99,55 @@ export async function POST(req: NextRequest): Promise<Response> {
     renterContact: typeof body.renterContact === "string" ? body.renterContact : null,
   });
 
+  // On a successful member request, fire comms best-effort (never blocks the
+  // response): planners get a "needs approval" notice when the booking is
+  // pending; the requester gets a confirmation if they left a renter_contact.
+  // Auto-approved requests (requires_approval=false) skip the planner notice.
+  if (result.ok) {
+    const bookingId = result.booking_id;
+    const isPending = result.status === "pending";
+    void fireRequestComms(ctx.churchId, bookingId, resourceIds[0], isPending).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error("[booking:comms] request notify failed", err);
+    });
+  }
+
   // request_booking returns {ok:false, conflicts} for slot clashes — surface as
   // 409 so the UI can show alternatives, vs 200 for a successful request.
   const status = result.ok ? 200 : 409;
   return NextResponse.json(result, { status });
+}
+
+async function fireRequestComms(
+  churchId: string,
+  bookingId: string,
+  primaryResourceId: string,
+  isPending: boolean,
+): Promise<void> {
+  const [booking, churchName, resources] = await Promise.all([
+    getBookingById(bookingId),
+    getChurchName(churchId),
+    listResources(churchId),
+  ]);
+  if (!booking) return;
+  const facility = resources.find((r) => r.id === primaryResourceId)?.name ?? booking.title;
+
+  if (isPending) {
+    await notifyPlannersOfRequest({
+      booking,
+      churchName,
+      facilityName: facility,
+      locale: "no",
+    });
+  }
+  // Requester confirmation only when an external contact was captured.
+  if (booking.renter_contact) {
+    await sendBookingComms({
+      templateKey: isPending ? "booking_requested" : "booking_approved",
+      booking,
+      churchName,
+      facilityName: facility,
+      locale: "no",
+    });
+  }
 }

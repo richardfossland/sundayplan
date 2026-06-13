@@ -6,11 +6,16 @@ import { sharedCookieOptions } from "./cookies";
 const AUTH_PREFIXES = ["/sign-in", "/sign-up"];
 
 /**
- * Public routes reachable WITHOUT a planner account. `/auth/callback` is the
- * OAuth landing: the session cookie isn't set until that handler exchanges the
- * code, so it must pass through un-gated. Keep this list tight.
+ * Routes reachable WITHOUT a planner account. `/auth/callback` is the OAuth
+ * landing (session cookie isn't set until the handler exchanges the code).
+ * Phase 3 adds the no-account renter surfaces:
+ *   - `/api/public/*`  — slug-scoped public API (rentals + slots)
+ *   - `/r/`            — renter status page (magic-link token IS the auth)
+ *   - `/leie/`         — public rental landing scoped by church slug
+ * Each enforces its own church-scoping server-side (verified slug / token); the
+ * middleware just declines to redirect them to /sign-in. Keep this list tight.
  */
-const PUBLIC_PREFIXES = ["/auth/callback"];
+const PUBLIC_PREFIXES = ["/auth/callback", "/api/public", "/r/", "/leie/"];
 
 /** Refresh the session cookie and gate app routes behind auth. */
 export async function updateSession(request: NextRequest) {

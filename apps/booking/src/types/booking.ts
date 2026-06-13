@@ -86,6 +86,19 @@ export interface BundleItem {
   resource_id: string;
 }
 
+/**
+ * A recurring weekly bookable window for a `person` resource (appointment /
+ * samtale booking). weekday: 0=Sunday … 6=Saturday (matches the SQL check +
+ * JS Date.getUTCDay()). Times are wall-clock `HH:MM[:SS]` strings.
+ */
+export interface Availability {
+  id: string;
+  resource_id: string;
+  weekday: number;
+  start_time: string;
+  end_time: string;
+}
+
 // ── RPC result shapes ────────────────────────────────────────────────────────
 
 export interface ConflictWindow {

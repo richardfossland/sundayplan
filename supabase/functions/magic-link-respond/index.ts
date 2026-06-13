@@ -9,7 +9,13 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { tokenHash, verifyMagicLink } from "../../../packages/auth/src/magic-link.ts";
 import { applyAssignmentResponse, consumeSingleUseLink } from "../../../packages/auth/src/rsvp.ts";
 
-const MAGICLINK_SECRET = Deno.env.get("MAGICLINK_SECRET") ?? "";
+// Verify against the current secret and, when set, the previous one — so a
+// secret rotation (set MAGICLINK_SECRET_PREVIOUS = old, MAGICLINK_SECRET = new)
+// keeps outstanding links valid until they expire. Signing always uses current.
+const MAGICLINK_SECRETS = [
+  Deno.env.get("MAGICLINK_SECRET") ?? "",
+  Deno.env.get("MAGICLINK_SECRET_PREVIOUS") ?? "",
+].filter(Boolean);
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
@@ -35,7 +41,7 @@ Deno.serve(async (req) => {
     return json({ error: "bad_request" }, 400);
   }
 
-  const verified = await verifyMagicLink(token, MAGICLINK_SECRET);
+  const verified = await verifyMagicLink(token, MAGICLINK_SECRETS);
   if (!verified.ok) return json({ error: verified.reason }, 401);
 
   const claims = verified.claims;

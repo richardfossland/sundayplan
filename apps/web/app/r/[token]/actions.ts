@@ -81,7 +81,9 @@ async function verify(
   token: string,
 ): Promise<{ ok: true; claims: MagicLinkClaims } | { ok: false; error: LoadError }> {
   if (!process.env.MAGICLINK_SECRET) return { ok: false, error: "missing_secret" };
-  const res = await verifyMagicLink(token, secret());
+  // During a secret rotation, also accept the previous secret (current first).
+  const previous = process.env.MAGICLINK_SECRET_PREVIOUS;
+  const res = await verifyMagicLink(token, previous ? [secret(), previous] : secret());
   if (!res.ok) {
     return { ok: false, error: res.reason === "expired" ? "expired" : "invalid" };
   }

@@ -45,7 +45,9 @@ export async function verifyBookingStatusToken(
   token: string,
 ): Promise<VerifiedBookingToken> {
   if (!hasMagicLinkSecret()) return { ok: false, error: "missing_secret" };
-  const res = await verifyBookingStatus(token, getSecret());
+  // During a secret rotation, also accept the previous secret (current first).
+  const previous = process.env.MAGICLINK_SECRET_PREVIOUS;
+  const res = await verifyBookingStatus(token, previous ? [getSecret(), previous] : getSecret());
   if (!res.ok) {
     const error: BookingTokenError =
       res.reason === "expired"

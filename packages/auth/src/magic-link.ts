@@ -26,6 +26,17 @@ const HEADER = { alg: "HS256", typ: "JWT" } as const;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
+/**
+ * A verification secret, or — for zero-downtime rotation — an ordered list of
+ * secrets to try (current first, then previous). Signing always uses a single
+ * secret; verification accepts the set so a token signed with a now-retired
+ * secret still validates until it expires. Standard overlapping-key rotation:
+ * issue with the new secret, keep the old one in the verify set until every
+ * outstanding token's TTL has lapsed, then drop it. Callers wire this from
+ * `MAGICLINK_SECRET` (+ optional `MAGICLINK_SECRET_PREVIOUS`).
+ */
+export type SecretOrSecrets = string | readonly string[];
+
 export interface IssueOptions {
   member_id: string;
   church_id: string;
@@ -62,22 +73,15 @@ export async function signMagicLink(opts: IssueOptions, secret: string): Promise
 
 export async function verifyMagicLink(
   token: string,
-  secret: string,
+  secret: SecretOrSecrets,
   now?: number,
 ): Promise<VerifyResult> {
   const parts = token.split(".");
   if (parts.length !== 3) return { ok: false, reason: "malformed" };
   const [header, body, sig] = parts;
-  const signingInput = `${header}.${body}`;
 
-  let signatureValid: boolean;
-  try {
-    const key = await hmacKey(secret);
-    signatureValid = await crypto.subtle.verify("HMAC", key, fromB64url(sig), textEncoder.encode(signingInput));
-  } catch {
-    return { ok: false, reason: "malformed" };
-  }
-  if (!signatureValid) return { ok: false, reason: "bad_signature" };
+  const sigCheck = await checkSignature(`${header}.${body}`, sig, secret);
+  if (sigCheck !== "valid") return { ok: false, reason: sigCheck };
 
   let claims: MagicLinkClaims;
   try {
@@ -142,22 +146,15 @@ export async function signChurchInvite(
 
 export async function verifyChurchInvite(
   token: string,
-  secret: string,
+  secret: SecretOrSecrets,
   now?: number,
 ): Promise<VerifyInviteResult> {
   const parts = token.split(".");
   if (parts.length !== 3) return { ok: false, reason: "malformed" };
   const [header, body, sig] = parts;
-  const signingInput = `${header}.${body}`;
 
-  let signatureValid: boolean;
-  try {
-    const key = await hmacKey(secret);
-    signatureValid = await crypto.subtle.verify("HMAC", key, fromB64url(sig), textEncoder.encode(signingInput));
-  } catch {
-    return { ok: false, reason: "malformed" };
-  }
-  if (!signatureValid) return { ok: false, reason: "bad_signature" };
+  const sigCheck = await checkSignature(`${header}.${body}`, sig, secret);
+  if (sigCheck !== "valid") return { ok: false, reason: sigCheck };
 
   let claims: ChurchInviteClaims;
   try {
@@ -240,22 +237,15 @@ export async function signBookingStatus(
 
 export async function verifyBookingStatus(
   token: string,
-  secret: string,
+  secret: SecretOrSecrets,
   now?: number,
 ): Promise<VerifyBookingStatusResult> {
   const parts = token.split(".");
   if (parts.length !== 3) return { ok: false, reason: "malformed" };
   const [header, body, sig] = parts;
-  const signingInput = `${header}.${body}`;
 
-  let signatureValid: boolean;
-  try {
-    const key = await hmacKey(secret);
-    signatureValid = await crypto.subtle.verify("HMAC", key, fromB64url(sig), textEncoder.encode(signingInput));
-  } catch {
-    return { ok: false, reason: "malformed" };
-  }
-  if (!signatureValid) return { ok: false, reason: "bad_signature" };
+  const sigCheck = await checkSignature(`${header}.${body}`, sig, secret);
+  if (sigCheck !== "valid") return { ok: false, reason: sigCheck };
 
   let claims: BookingStatusClaims;
   try {
@@ -288,6 +278,39 @@ export async function tokenHash(token: string): Promise<string> {
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+/**
+ * Verify a token's HMAC signature against one OR MORE secrets (see
+ * {@link SecretOrSecrets}). `"valid"` if ANY secret matches; `"bad_signature"`
+ * if none do; `"malformed"` if the signature segment isn't decodable base64url.
+ * Decoding happens once (secret-independent); only the cheap `verify` is retried
+ * per secret. Mirrors the previous single-secret semantics exactly when given
+ * one secret.
+ */
+async function checkSignature(
+  signingInput: string,
+  sig: string,
+  secret: SecretOrSecrets,
+): Promise<"valid" | "bad_signature" | "malformed"> {
+  let sigBytes: Uint8Array<ArrayBuffer>;
+  try {
+    sigBytes = fromB64url(sig);
+  } catch {
+    return "malformed";
+  }
+  const secrets = typeof secret === "string" ? [secret] : secret;
+  const input = textEncoder.encode(signingInput);
+  for (const s of secrets) {
+    try {
+      const key = await hmacKey(s);
+      if (await crypto.subtle.verify("HMAC", key, sigBytes, input)) return "valid";
+    } catch {
+      // A single unusable secret (e.g. an empty/misconfigured env value can't be
+      // imported as an HMAC key) must not abort the rotation set — try the rest.
+    }
+  }
+  return "bad_signature";
 }
 
 async function hmacKey(secret: string): Promise<CryptoKey> {

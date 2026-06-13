@@ -23,7 +23,7 @@ import {
   listResources,
   setPaymentStatus,
 } from "@/lib/data/booking";
-import { createPaymentProvider } from "@/lib/payments";
+import { createPaymentProvider, paymentsConfigured } from "@/lib/payments";
 import type { RentalSnapshot } from "@/lib/rental-agreement";
 import { DEFAULT_LOCALE, isLocale, type Locale } from "@/lib/i18n/messages";
 import type { BookingStatus, PaymentStatus } from "@/src/types/booking";
@@ -200,6 +200,12 @@ export async function payDeposit(token: string): Promise<PayResult> {
  * the local flow needs no inbound webhook.
  */
 export async function completeStubDeposit(token: string): Promise<{ ok: boolean }> {
+  // Real Vipps configured → the stub path is NOT a valid way to mark paid; the
+  // provider's webhook (getStatus-confirmed) is authoritative. Refuse so a
+  // crafted `?stub=1` return can't shortcut a real payment.
+  if (paymentsConfigured(process.env as Record<string, string | undefined>)) {
+    return { ok: false };
+  }
   const v = await verifyBookingStatusToken(token);
   if (!v.ok) return { ok: false };
   const booking = await getBookingById(v.bookingId);

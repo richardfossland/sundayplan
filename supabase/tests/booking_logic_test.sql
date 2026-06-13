@@ -361,4 +361,94 @@ begin
   raise notice 'PASS(9): rental fields + agreement snapshot/acceptance + payment_status lifecycle';
 end $$;
 
+-- ── Assertion 10: signage does NOT leak renter PII (external rental title) ─────
+-- An external rental's booking.title embeds the renter name (e.g.
+-- "Bryllup — Ola Nordmann"). The PUBLIC signage view/board must replace it with a
+-- non-PII label (event-type name, else 'Privat arrangement').
+do $$
+declare
+  v_church uuid := (select id from public.church where slug = 'bookingkirken');
+  v_room   uuid := (select id from booking.resource where church_id = v_church and name = 'Lillesalen');
+  v_now    timestamptz := '2026-07-10T13:00:00Z';
+  v_et     uuid;
+  res      jsonb;
+  v_bk     uuid;
+  v_title  text;
+  board    jsonb;
+begin
+  if v_room is null then
+    insert into booking.resource (church_id, kind, name, bookable_by, requires_approval, status)
+      values (v_church, 'room', 'Lillesalen', 'public', false, 'active')
+      returning id into v_room;
+  end if;
+  insert into booking.event_type (church_id, name, requires_approval)
+    values (v_church, 'Bryllup-signage', false) returning id into v_et;
+
+  -- External rental: renter_name set, title embeds the renter PII.
+  res := booking.request_booking(v_church, array[v_room], v_et,
+           'Bryllup — Ola Nordmann', '2026-07-10T12:00:00Z', '2026-07-10T14:00:00Z',
+           0, 0, null, 'Ola Nordmann', 'ola@example.com');
+  v_bk := (res->>'booking_id')::uuid;
+  update booking.booking set show_on_signage = true where id = v_bk;
+
+  -- The view's title must NOT contain the renter name.
+  select title into v_title from booking.displayable where booking_id = v_bk;
+  if v_title is null or position('Ola Nordmann' in v_title) > 0 then
+    raise exception 'FAIL(10a): signage view leaked renter PII in title: %', v_title;
+  end if;
+  if v_title <> 'Bryllup-signage' then
+    raise exception 'FAIL(10b): expected event-type label, got: %', v_title;
+  end if;
+
+  -- The board (what the public feed serves) must not contain the renter name.
+  board := booking.signage_board(v_church, v_now);
+  if position('Ola Nordmann' in board::text) > 0 then
+    raise exception 'FAIL(10c): signage_board leaked renter PII: %', board;
+  end if;
+
+  -- An INTERNAL booking (no renter) keeps its real title.
+  res := booking.request_booking(v_church, array[v_room], null,
+           'Internt møte', '2026-07-11T12:00:00Z', '2026-07-11T14:00:00Z', 0, 0, null);
+  update booking.booking set show_on_signage = true where id = (res->>'booking_id')::uuid;
+  select title into v_title from booking.displayable where booking_id = (res->>'booking_id')::uuid;
+  if v_title <> 'Internt møte' then
+    raise exception 'FAIL(10d): internal booking title was altered: %', v_title;
+  end if;
+
+  raise notice 'PASS(10): signage title is PII-safe for external rentals, intact for internal bookings';
+end $$;
+
+-- ── Assertion 11: RLS — anon cannot read rental_agreement (renter PII) ─────────
+do $$
+declare
+  v_church uuid := (select id from public.church where slug = 'bookingkirken');
+  v_room   uuid := (select id from booking.resource where church_id = v_church and name = 'Lillesalen' limit 1);
+  res      jsonb;
+  v_bk     uuid;
+  r        jsonb;
+  n        int;
+begin
+  res := booking.request_booking(v_church, array[v_room], null,
+           'Privat — Kari Nordmann', '2026-08-01T12:00:00Z', '2026-08-01T14:00:00Z',
+           0, 0, null, 'Kari Nordmann', 'kari@example.com');
+  v_bk := (res->>'booking_id')::uuid;
+  r := booking.capture_rental_agreement(v_bk, v_church,
+         jsonb_build_object('renter', 'Kari Nordmann'), '<html>kontrakt</html>');
+  if not (r->>'ok')::boolean then
+    raise exception 'FAIL(11a): could not capture agreement: %', r;
+  end if;
+
+  -- Anon (no membership) must see ZERO agreements (RLS = is_member_of).
+  perform set_config('request.jwt.claims', '{}', true);
+  perform set_config('request.jwt.claim.sub', '', true);
+  perform set_config('role', 'anon', true);
+  select count(*) into n from booking.rental_agreement;
+  perform set_config('role', 'postgres', true);
+  if n <> 0 then
+    raise exception 'FAIL(11b): anon read % rental_agreement rows (PII leak)', n;
+  end if;
+
+  raise notice 'PASS(11): anon cannot read rental_agreement (renter PII stays member-only)';
+end $$;
+
 select 'ALL BOOKING-LOGIC TESTS PASSED' as result;

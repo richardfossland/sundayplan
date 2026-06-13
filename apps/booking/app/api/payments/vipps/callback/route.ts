@@ -8,12 +8,14 @@
  * provider (`getStatus`) when configured, and flips booking.payment_status
  * accordingly via the SECURITY DEFINER RPC.
  *
- * The reference is the authorization surface here: it embeds our own booking id
- * and is only known to us + Vipps. With real Vipps additionally configure the
- * webhook secret / signature verification (a noted future hardening — Vipps
- * signs callbacks with an HMAC the merchant registers). The stub never hits this
- * route (it completes via the return-page action), so the keyless gate stays
- * green without an inbound webhook.
+ * SECURITY: the callback body is UNTRUSTED. The reference (`booking:<id>:deposit`)
+ * is only a correlation handle, NOT proof of payment. So this route NEVER trusts
+ * the body's state: with real Vipps configured it re-confirms via getStatus and
+ * only flips on a provider-confirmed terminal state (failing closed if getStatus
+ * can't confirm); without merchant creds it mutates nothing (the stub completes
+ * via the return-page action tied to the booking's own reference, so no inbound
+ * webhook is needed). A future hardening is to additionally verify the Vipps HMAC
+ * webhook signature, but the getStatus re-confirmation is the load-bearing check.
  */
 import { NextResponse, type NextRequest } from "next/server";
 import {
@@ -23,7 +25,6 @@ import {
 } from "@/lib/data/booking";
 import {
   createPaymentProvider,
-  parseVippsState,
   paymentStatusToBookingStatus,
   paymentsConfigured,
 } from "@/lib/payments";
@@ -52,17 +53,33 @@ export async function POST(req: NextRequest): Promise<Response> {
   const booking = await getBookingById(ref.bookingId);
   if (!booking) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-  // Determine the authoritative payment state. With real Vipps configured we
-  // re-fetch the status from the provider (never trust the webhook body alone);
-  // otherwise we map the body's state field directly (stub / test callers).
-  let status = parseVippsState(
-    typeof body.name === "string" ? body.name : (body.state as string | undefined),
-  );
-  if (paymentsConfigured(process.env as Record<string, string | undefined>)) {
-    const provider = createPaymentProvider(process.env as Record<string, string | undefined>);
-    const confirmed = await provider.getStatus(booking.payment_reference ?? ref.bookingId);
-    if (confirmed.ok) status = confirmed.status;
+  // Determine the authoritative payment state. The webhook body is UNTRUSTED —
+  // anyone who can guess `booking:<id>:deposit` could POST a forged "CAPTURED".
+  //
+  //   • Real Vipps configured: we IGNORE the body entirely and re-fetch the
+  //     status from the provider (getStatus). Only a status the provider itself
+  //     confirms is allowed to flip the booking. If getStatus fails (auth/network
+  //     error), we do NOT fall back to the body — we reject, so a forged callback
+  //     cannot upgrade payment_status when the real provider is unreachable.
+  //   • No merchant creds (stub mode): there is no real Vipps to call back, so a
+  //     legitimate inbound webhook never reaches this route (the stub completes
+  //     via the return-page action tied to the booking's own reference). We
+  //     therefore refuse to flip any status from an unauthenticated body here.
+  const configured = paymentsConfigured(process.env as Record<string, string | undefined>);
+  if (!configured) {
+    // Stub mode: accept the ping (so a misconfigured test webhook 200s) but never
+    // mutate payment state from the body alone.
+    return NextResponse.json({ ok: true, ignored: "stub_mode" }, { status: 200 });
   }
+
+  const provider = createPaymentProvider(process.env as Record<string, string | undefined>);
+  const confirmed = await provider.getStatus(booking.payment_reference ?? ref.bookingId);
+  if (!confirmed.ok) {
+    // Could not confirm with Vipps → do not trust the callback body. 202 so Vipps
+    // retries the webhook later rather than treating it as a permanent failure.
+    return NextResponse.json({ ok: false, error: "unconfirmed" }, { status: 202 });
+  }
+  const status = confirmed.status;
 
   // Only act on a captured/refunded terminal state; ignore created/authorized
   // noise (the renter is still mid-flow).

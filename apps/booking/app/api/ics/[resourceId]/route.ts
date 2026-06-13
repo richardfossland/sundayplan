@@ -40,17 +40,25 @@ export async function GET(
     });
   }
 
-  // Authorization: public resources are open; others need the feed token.
+  // Authorization: public resources are open; others need the feed token. A
+  // public (token-less) feed is consumed by anonymous subscribers, so it must
+  // NOT leak renter PII; a token'd feed (members/staff who hold the HMAC token)
+  // may show the real title + notes.
+  let authorized = true; // public resources are open
   if (resource.bookable_by !== "public") {
     const token = new URL(req.url).searchParams.get("token") ?? "";
-    const ok = await verifyIcsFeedToken(resourceId, token);
-    if (!ok) {
+    authorized = await verifyIcsFeedToken(resourceId, token);
+    if (!authorized) {
       return new Response(JSON.stringify({ error: "forbidden" }), {
         status: 403,
         headers: { "content-type": "application/json" },
       });
     }
   }
+  // A public feed (no feed-token required) is the ONLY anon-readable case; it
+  // gets a generic title and no description so a renter's name / event purpose
+  // never lands on a public calendar subscription.
+  const publicFeed = resource.bookable_by === "public";
 
   const now = Date.now();
   const from = new Date(now - PAST_MS).toISOString();
@@ -61,9 +69,11 @@ export async function GET(
     uid: b.id,
     start: b.starts_at_utc,
     end: b.ends_at_utc,
-    summary: b.title,
+    // Public feed: a generic "busy" title (no renter name / purpose). Token'd
+    // member/staff feed: the real title.
+    summary: publicFeed ? "Opptatt" : b.title,
     location: resource.name,
-    description: b.notes ?? b.purpose ?? null,
+    description: publicFeed ? null : (b.notes ?? b.purpose ?? null),
     status: b.status,
   }));
 

@@ -35,7 +35,16 @@ create or replace view booking.displayable as
   select
     b.id              as booking_id,
     b.church_id       as church_id,
-    b.title           as title,
+    -- PII-safe signage label: a foyer screen is a PUBLIC surface, so we never
+    -- expose the raw booking.title for an EXTERNAL rental (its title embeds the
+    -- renter's name, e.g. "Bryllup — Ola Nordmann"). For external rentals
+    -- (renter_name present) we fall back to the event-type name, else a generic
+    -- "Privat arrangement". Internal bookings (no renter_name) keep their title.
+    case
+      when b.renter_name is not null and b.renter_name <> ''
+        then coalesce(et.name, 'Privat arrangement')
+      else b.title
+    end               as title,
     b.starts_at_utc   as starts_at_utc,
     b.ends_at_utc     as ends_at_utc,
     b.event_type_id   as event_type_id,

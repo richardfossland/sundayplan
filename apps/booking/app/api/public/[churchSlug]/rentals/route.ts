@@ -22,14 +22,50 @@ import {
 import { hasMagicLinkSecret, mintBookingStatusToken } from "@/lib/booking-link";
 import { notifyPlannersOfRequest, sendBookingComms } from "@/lib/comms";
 import { startRentalMonetization } from "@/lib/rental-flow";
+import { clientIp, rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+/** Slugs are `[a-z0-9-]+` — reject obviously malformed ones before any DB hit. */
+const SLUG_RE = /^[a-z0-9-]{1,64}$/;
+/** A v4-ish uuid shape, so a smuggled non-uuid id is rejected early. */
+const UUID_RE = /^[0-9a-f-]{36}$/i;
+
+// Input bounds — cap free-text so an anon caller can't store huge blobs.
+const MAX_NAME = 120;
+const MAX_CONTACT = 200;
+const MAX_PURPOSE = 200;
+// Anon rental POSTs per IP+slug: 5 per minute. A real renter needs one or two.
+const RL_LIMIT = 5;
+const RL_WINDOW_MS = 60_000;
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ churchSlug: string }> },
 ): Promise<Response> {
   const { churchSlug } = await params;
+
+  // Reject malformed slugs before any DB round-trip (cheap enumeration guard).
+  if (!SLUG_RE.test(churchSlug)) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  // Lightweight per-IP+slug rate limit on the unauthenticated POST. Throttles
+  // mass-pending-booking abuse + slug enumeration. (In-memory; see lib/rate-limit
+  // for the durable-store prod upgrade.)
+  const rl = rateLimit(`rental:${clientIp(req.headers)}:${churchSlug}`, {
+    limit: RL_LIMIT,
+    windowMs: RL_WINDOW_MS,
+  });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "rate_limited" },
+      {
+        status: 429,
+        headers: { "retry-after": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) },
+      },
+    );
+  }
 
   // Resolve church + its public resources up front; both reject unknown slugs.
   const publicResources = await listPublicResourcesBySlug(churchSlug);
@@ -52,22 +88,37 @@ export async function POST(
   const ends = body.ends;
   const purpose = typeof body.purpose === "string" ? body.purpose.trim() : "";
 
-  if (typeof resourceId !== "string") {
+  if (typeof resourceId !== "string" || !UUID_RE.test(resourceId)) {
     return NextResponse.json({ error: "resource_required" }, { status: 400 });
   }
-  // Whitelist: the resource MUST be one of this church's public resources.
+  // Whitelist: the resource MUST be one of this church's public resources. A
+  // smuggled members/staff resource id is not in this set → 403.
   const resource = resources.find((r) => r.id === resourceId);
   if (!resource) {
     return NextResponse.json({ error: "resource_not_bookable" }, { status: 403 });
   }
-  if (!renterName) {
+  if (!renterName || renterName.length > MAX_NAME) {
     return NextResponse.json({ error: "name_required" }, { status: 400 });
   }
-  if (!renterContact) {
+  if (!renterContact || renterContact.length > MAX_CONTACT) {
     return NextResponse.json({ error: "contact_required" }, { status: 400 });
+  }
+  if (purpose.length > MAX_PURPOSE) {
+    return NextResponse.json({ error: "purpose_too_long" }, { status: 400 });
   }
   if (typeof starts !== "string" || typeof ends !== "string") {
     return NextResponse.json({ error: "starts_ends_required" }, { status: 400 });
+  }
+  // Validate the window is parseable + sane (ends after starts) before the RPC.
+  const startMs = Date.parse(starts);
+  const endMs = Date.parse(ends);
+  if (Number.isNaN(startMs) || Number.isNaN(endMs) || endMs <= startMs) {
+    return NextResponse.json({ error: "bad_range" }, { status: 400 });
+  }
+  // Cap a single booking window so a renter can't request a year-long hold.
+  const MAX_BOOKING_MS = 30 * 24 * 60 * 60 * 1000;
+  if (endMs - startMs > MAX_BOOKING_MS) {
+    return NextResponse.json({ error: "range_too_long" }, { status: 400 });
   }
 
   const title = purpose ? `${purpose} — ${renterName}` : `${resource.name} — ${renterName}`;

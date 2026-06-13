@@ -19,6 +19,13 @@ export interface TierLimits {
   smsSegmentsPerMonth: number;
   /** Max people (volunteers) in the church roster. */
   maxPeople: number;
+  /**
+   * Pastor's-chat AI agent turns per calendar month. The agent calls Anthropic
+   * (a metered, paid resource), so each church gets a monthly allowance enforced
+   * exactly like SMS — the route consults `checkAiQuota` BEFORE invoking the
+   * model. The free tier gets a taste; paid tiers get progressively more.
+   */
+  aiAgentTurnsPerMonth: number;
 }
 
 /**
@@ -27,10 +34,10 @@ export interface TierLimits {
  * adjust here and every enforcement point follows.
  */
 export const TIER_LIMITS: Record<PlanTier, TierLimits> = {
-  free: { smsSegmentsPerMonth: 50, maxPeople: 50 },
-  starter: { smsSegmentsPerMonth: 500, maxPeople: 150 },
-  growth: { smsSegmentsPerMonth: 2000, maxPeople: 500 },
-  network: { smsSegmentsPerMonth: 10000, maxPeople: 5000 },
+  free: { smsSegmentsPerMonth: 50, maxPeople: 50, aiAgentTurnsPerMonth: 30 },
+  starter: { smsSegmentsPerMonth: 500, maxPeople: 150, aiAgentTurnsPerMonth: 300 },
+  growth: { smsSegmentsPerMonth: 2000, maxPeople: 500, aiAgentTurnsPerMonth: 1500 },
+  network: { smsSegmentsPerMonth: 10000, maxPeople: 5000, aiAgentTurnsPerMonth: 6000 },
 };
 
 export function limitsFor(tier: string | null | undefined): TierLimits {
@@ -102,4 +109,57 @@ export function checkSmsQuota(state: SmsQuotaState, segments: number): SmsQuotaD
 /** Whether the roster can grow to `peopleCount` members on this tier. */
 export function checkPeopleLimit(tier: string | null | undefined, peopleCount: number): boolean {
   return peopleCount <= limitsFor(tier).maxPeople;
+}
+
+export interface AiQuotaState {
+  tier: string | null | undefined;
+  /** `church_settings.ai_agent_turns_used` — turns used since the last reset. */
+  used: number;
+  /** `church_settings.ai_quota_used_at_reset` — when the counter last reset. */
+  usedAtReset: Date | string;
+  /** "Now" — injectable for tests. */
+  now?: Date;
+}
+
+export interface AiQuotaDecision {
+  allowed: boolean;
+  /** Turns remaining BEFORE this run (after an implicit month rollover). */
+  remaining: number;
+  /** The counter value the caller should persist if it proceeds with the run. */
+  nextUsed: number;
+  /** True when the month rolled over and the caller should also reset the timestamp. */
+  shouldReset: boolean;
+  /** Human-readable refusal, set when `allowed` is false. */
+  reason?: string;
+}
+
+/**
+ * Decide whether one more Pastor's-chat agent turn fits the church's monthly AI
+ * allowance. Mirrors {@link checkSmsQuota} exactly (same monthly-rollover logic)
+ * so AI metering behaves identically to SMS metering: a turn either fits or is
+ * refused with a clear reason, and the caller persists `nextUsed` only on a
+ * successful run. Pure — the DB write-back stays with the caller.
+ */
+export function checkAiQuota(state: AiQuotaState, turns = 1): AiQuotaDecision {
+  const limits = limitsFor(state.tier);
+  const now = state.now ?? new Date();
+  const resetAt = typeof state.usedAtReset === "string" ? new Date(state.usedAtReset) : state.usedAtReset;
+
+  const rolledOver = differentUtcMonth(resetAt, now);
+  const used = rolledOver ? 0 : Math.max(0, state.used);
+  const remaining = Math.max(0, limits.aiAgentTurnsPerMonth - used);
+
+  if (turns > remaining) {
+    return {
+      allowed: false,
+      remaining,
+      nextUsed: used,
+      shouldReset: rolledOver,
+      reason:
+        `ai_quota_exceeded: ${remaining} of ${limits.aiAgentTurnsPerMonth} AI-turns left this month ` +
+        `on the ${(state.tier ?? "free").toString()} plan`,
+    };
+  }
+
+  return { allowed: true, remaining, nextUsed: used + turns, shouldReset: rolledOver };
 }

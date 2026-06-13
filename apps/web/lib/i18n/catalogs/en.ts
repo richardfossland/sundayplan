@@ -852,6 +852,22 @@ const en: Catalog = {
   "settings.privacy.export.hint": "A complete export of everything in your workspace — people, services, assignments, messages. GDPR article 20.",
   "people.erase": "Erase person (GDPR)",
   "people.erase.confirm": "This permanently removes name and contact details. Service history stays anonymous. Continue?",
+
+  "plannerChat.title": "Planning assistant",
+  "plannerChat.intro": "Ask in plain language — I use the church's own scheduling engines and show you a draft to review. Nothing is saved until you accept it.",
+  "plannerChat.placeholder": "e.g. fill the open roles fairly",
+  "plannerChat.send": "Send",
+  "plannerChat.sending": "Thinking…",
+  "plannerChat.diff.title": "Proposed assignments ({count})",
+  "plannerChat.diff.unfilled": "{count} role(s) still need someone.",
+  "plannerChat.diff.accept": "Accept draft",
+  "plannerChat.diff.accepting": "Saving…",
+  "plannerChat.diff.accepted": "Saved",
+  "plannerChat.diff.notSaved": "Nothing is saved until you accept.",
+  "plannerChat.unavailable.noKey": "The AI assistant is off. The auto-fill button still works as usual.",
+  "plannerChat.unavailable.consent": "Turn on AI features in Settings to use the assistant. The auto-fill button works without it.",
+  "plannerChat.unavailable.quota": "You've used this month's AI allowance. The auto-fill button still works.",
+  "plannerChat.unavailable.error": "The assistant couldn't respond just now. Please try again, or use the auto-fill button.",
 };
 
 export default en;

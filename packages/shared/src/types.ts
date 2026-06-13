@@ -54,6 +54,10 @@ export interface ChurchSettings {
   single_use_response_links: boolean;
   sms_quota_used: number;
   ai_consent: boolean;
+  /** Pastor's-chat agent turns used this month (mirrors sms_quota_used). */
+  ai_agent_turns_used: number;
+  /** When the AI-turn counter last reset (UTC month rollover). */
+  ai_quota_used_at_reset: string;
   auto_buy_sms_overage: boolean;
   sundaystage_connected: boolean;
   sundayrec_connected: boolean;

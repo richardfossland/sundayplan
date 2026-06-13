@@ -3,6 +3,7 @@ import { ConflictPanel } from "@/components/dashboard";
 import { ScheduleGrid, ScheduleLegend } from "@/components/schedule";
 import { ScheduleMobile } from "@/components/schedule-mobile";
 import { AutoFillButton } from "@/components/autofill-button";
+import { PlannerChat } from "@/components/planner-chat";
 import { getSchedule } from "@/lib/data/schedule";
 import { getT, getLocale } from "@/lib/i18n/server";
 
@@ -53,6 +54,8 @@ export default async function SchedulePage({
       </div>
 
       <ConflictPanel conflicts={conflicts} roleNames={roleNames} memberNames={memberNames} t={t} />
+
+      <PlannerChat />
 
       <p className="text-center text-xs text-ink-600">{t("schedule.footer")}</p>
     </div>

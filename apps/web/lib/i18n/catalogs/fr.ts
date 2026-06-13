@@ -854,6 +854,22 @@ const fr: Catalog = {
   "settings.privacy.export.hint": "Un export complet de tout votre espace de travail — personnes, cultes, affectations, messages. RGPD article 20.",
   "people.erase": "Effacer la personne (RGPD)",
   "people.erase.confirm": "Cela supprime définitivement le nom et les coordonnées. L’historique de service reste anonyme. Continuer ?",
+
+  "plannerChat.title": "Assistant de planification",
+  "plannerChat.intro": "Demandez en langage courant — j’utilise les propres moteurs de planification de l’église et vous montre un brouillon à examiner. Rien n’est enregistré tant que vous ne l’acceptez pas.",
+  "plannerChat.placeholder": "ex. : pourvoir équitablement les rôles libres",
+  "plannerChat.send": "Envoyer",
+  "plannerChat.sending": "Réflexion…",
+  "plannerChat.diff.title": "Affectations proposées ({count})",
+  "plannerChat.diff.unfilled": "{count} rôle(s) cherchent encore quelqu’un.",
+  "plannerChat.diff.accept": "Accepter le brouillon",
+  "plannerChat.diff.accepting": "Enregistrement…",
+  "plannerChat.diff.accepted": "Enregistré",
+  "plannerChat.diff.notSaved": "Rien n’est enregistré tant que vous n’acceptez pas.",
+  "plannerChat.unavailable.noKey": "L’assistant IA est désactivé. Le bouton de remplissage automatique fonctionne comme d’habitude.",
+  "plannerChat.unavailable.consent": "Activez les fonctions IA dans les Paramètres pour utiliser l’assistant. Le remplissage automatique fonctionne sans.",
+  "plannerChat.unavailable.quota": "Vous avez épuisé le quota IA du mois. Le remplissage automatique fonctionne toujours.",
+  "plannerChat.unavailable.error": "L’assistant n’a pas pu répondre à l’instant. Réessayez, ou utilisez le remplissage automatique.",
 };
 
 export default fr;

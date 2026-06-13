@@ -7,6 +7,7 @@
 
 export * from "./scoring";
 export * from "./rationale-refiner";
+export * from "./agent";
 export * from "./conflicts";
 export * from "./autofill";
 export * from "./balancedAutofill";

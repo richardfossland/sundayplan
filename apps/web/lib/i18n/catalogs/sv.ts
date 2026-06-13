@@ -851,6 +851,22 @@ const sv: Catalog = {
   "settings.privacy.export.hint": "En fullständig export av allt i din arbetsyta — personer, gudstjänster, uppdrag, meddelanden. GDPR artikel 20.",
   "people.erase": "Radera person (GDPR)",
   "people.erase.confirm": "Detta tar permanent bort namn och kontaktuppgifter. Tjänstgöringshistoriken förblir anonym. Fortsätta?",
+
+  "plannerChat.title": "Planeringsassistent",
+  "plannerChat.intro": "Fråga med vanliga ord — jag använder församlingens egna planeringsmotorer och visar dig ett utkast att granska. Ingenting sparas förrän du godkänner det.",
+  "plannerChat.placeholder": "t.ex. fyll de öppna rollerna rättvist",
+  "plannerChat.send": "Skicka",
+  "plannerChat.sending": "Tänker…",
+  "plannerChat.diff.title": "Föreslagna tilldelningar ({count})",
+  "plannerChat.diff.unfilled": "{count} roll(er) saknar fortfarande någon.",
+  "plannerChat.diff.accept": "Godkänn utkast",
+  "plannerChat.diff.accepting": "Sparar…",
+  "plannerChat.diff.accepted": "Sparat",
+  "plannerChat.diff.notSaved": "Ingenting sparas förrän du godkänner.",
+  "plannerChat.unavailable.noKey": "AI-assistenten är av. Autofyll-knappen fungerar som vanligt.",
+  "plannerChat.unavailable.consent": "Slå på AI-funktioner i Inställningar för att använda assistenten. Autofyll-knappen fungerar utan.",
+  "plannerChat.unavailable.quota": "Du har använt månadens AI-kvot. Autofyll-knappen fungerar fortfarande.",
+  "plannerChat.unavailable.error": "Assistenten kunde inte svara just nu. Försök igen, eller använd autofyll-knappen.",
 };
 
 export default sv;

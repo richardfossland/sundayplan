@@ -57,6 +57,16 @@ export interface ScheduleData {
   eligibleByRole: Record<string, EligibleMember[]>;
   /** Required slot count per `${service_id}|${role_id}` (templated services). */
   requiredByServiceRole: Record<string, number>;
+  /** Role display names, by id — used by the planning agent's diff narration. */
+  roleNames: Record<string, string>;
+  /** Service column labels, by id — used by the planning agent's diff narration. */
+  serviceLabels: Record<string, string>;
+  /**
+   * The fully-assembled conflict-engine context for the live schedule. Exposed
+   * so the Pastor's-chat agent can run `detectConflicts` as a tool over the same
+   * snapshot the grid shows, without re-querying. (Already computed here.)
+   */
+  conflictContext: ConflictContext;
 }
 
 const SKILL_RANK: Record<SkillLevel, number> = {
@@ -290,6 +300,11 @@ export async function getSchedule(locale = "no"): Promise<ScheduleData> {
     requiredByServiceRole[`${req.service_id}|${req.role_id}`] = req.quantity;
   }
 
+  const roleNames: Record<string, string> = Object.fromEntries(roleRows.map((r) => [r.id, r.name]));
+  const serviceLabels: Record<string, string> = Object.fromEntries(
+    gridServices.map((s) => [s.id, s.label]),
+  );
+
   return {
     services: gridServices,
     roles: gridRoles,
@@ -298,5 +313,8 @@ export async function getSchedule(locale = "no"): Promise<ScheduleData> {
     memberNames,
     eligibleByRole,
     requiredByServiceRole,
+    roleNames,
+    serviceLabels,
+    conflictContext: ctx,
   };
 }

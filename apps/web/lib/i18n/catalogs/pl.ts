@@ -843,6 +843,22 @@ const pl: Catalog = {
   "settings.privacy.export.hint": "Pełny eksport wszystkiego w Twoim obszarze roboczym — osoby, nabożeństwa, grafiki, wiadomości. RODO art. 20.",
   "people.erase": "Usuń osobę (RODO)",
   "people.erase.confirm": "To trwale usuwa imię i dane kontaktowe. Historia służby pozostaje anonimowa. Kontynuować?",
+
+  "plannerChat.title": "Asystent planowania",
+  "plannerChat.intro": "Pytaj zwykłymi słowami — korzystam z własnych silników planowania kościoła i pokazuję Ci wersję roboczą do sprawdzenia. Nic nie jest zapisywane, dopóki tego nie zaakceptujesz.",
+  "plannerChat.placeholder": "np. sprawiedliwie obsadź wolne role",
+  "plannerChat.send": "Wyślij",
+  "plannerChat.sending": "Myślę…",
+  "plannerChat.diff.title": "Proponowane przydziały ({count})",
+  "plannerChat.diff.unfilled": "{count} rola(role) wciąż potrzebuje kogoś.",
+  "plannerChat.diff.accept": "Zaakceptuj wersję roboczą",
+  "plannerChat.diff.accepting": "Zapisywanie…",
+  "plannerChat.diff.accepted": "Zapisano",
+  "plannerChat.diff.notSaved": "Nic nie jest zapisywane, dopóki nie zaakceptujesz.",
+  "plannerChat.unavailable.noKey": "Asystent AI jest wyłączony. Przycisk automatycznego uzupełniania działa jak zwykle.",
+  "plannerChat.unavailable.consent": "Włącz funkcje AI w Ustawieniach, aby korzystać z asystenta. Automatyczne uzupełnianie działa bez tego.",
+  "plannerChat.unavailable.quota": "Wykorzystano miesięczny limit AI. Przycisk automatycznego uzupełniania nadal działa.",
+  "plannerChat.unavailable.error": "Asystent nie mógł teraz odpowiedzieć. Spróbuj ponownie lub użyj automatycznego uzupełniania.",
 };
 
 export default pl;

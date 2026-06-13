@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { schemas } from "@sundayplan/shared";
-import { TIER_LIMITS, checkPeopleLimit, checkSmsQuota, limitsFor } from "./quota";
+import { TIER_LIMITS, checkAiQuota, checkPeopleLimit, checkSmsQuota, limitsFor } from "./quota";
 
 it("covers exactly the tiers the shared schema defines", () => {
   expect(Object.keys(TIER_LIMITS).sort()).toEqual([...schemas.ChurchPlanTier.options].sort());
@@ -68,6 +68,32 @@ describe("checkSmsQuota", () => {
       1,
     );
     expect(d.nextUsed).toBe(1);
+  });
+});
+
+describe("checkAiQuota", () => {
+  it("allows a turn within quota and returns the counter to persist", () => {
+    const d = checkAiQuota({ tier: "free", used: 5, usedAtReset: "2026-06-01T00:00:00Z", now: inJune });
+    expect(d).toMatchObject({ allowed: true, remaining: 25, nextUsed: 6, shouldReset: false });
+  });
+
+  it("refuses when the month's AI allowance is exhausted", () => {
+    const d = checkAiQuota({ tier: "free", used: 30, usedAtReset: "2026-06-01T00:00:00Z", now: inJune });
+    expect(d.allowed).toBe(false);
+    expect(d.remaining).toBe(0);
+    expect(d.reason).toContain("ai_quota_exceeded");
+    expect(d.reason).toContain("free");
+  });
+
+  it("rolls the counter over implicitly in a new UTC month", () => {
+    const d = checkAiQuota({ tier: "free", used: 30, usedAtReset: "2026-05-20T00:00:00Z", now: inJune });
+    expect(d).toMatchObject({ allowed: true, nextUsed: 1, shouldReset: true });
+  });
+
+  it("scales the allowance with the tier", () => {
+    const d = checkAiQuota({ tier: "growth", used: 1499, usedAtReset: "2026-06-01T00:00:00Z", now: inJune });
+    expect(d.allowed).toBe(true);
+    expect(d.nextUsed).toBe(1500);
   });
 });
 

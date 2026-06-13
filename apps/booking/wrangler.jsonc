@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "sundaybooking",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-05-05",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  // TEST PHASE: gate this behind Cloudflare Access (zero-trust) until the
+  // booking flows are rig-tested. Swap to booking-test.sundaysuite.app here if
+  // you want a throwaway test host instead of the production name.
+  "routes": [{ "pattern": "booking.sundaysuite.app", "custom_domain": true }],
+  "observability": {
+    "enabled": true
+  },
+  // Public, non-secret runtime vars.
+  "vars": {
+    "NEXT_PUBLIC_APP_URL": "https://booking.sundaysuite.app"
+  }
+  // Runtime env (set as Worker secrets, NOT committed):
+  //   NEXT_PUBLIC_SUPABASE_URL + NEXT_PUBLIC_SUPABASE_ANON_KEY are build-time
+  //   inlined (export them before `cf:build`); the service-role key is a
+  //   runtime secret:  npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+}

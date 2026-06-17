@@ -116,4 +116,22 @@ begin
   raise notice 'PASS: 0019 WITH CHECK rejects claims for other members';
 end $$;
 
+-- 0025: booking write RPCs must be service-role-only. They are SECURITY DEFINER
+-- with no internal church/role check, so any client execute grant is a
+-- cross-tenant write hole. (Postgres defaults functions to EXECUTE for PUBLIC —
+-- the revoke must hit PUBLIC, not just authenticated/anon.)
+do $$
+begin
+  if has_function_privilege('authenticated', 'booking.approve_booking(uuid,uuid)', 'execute') then
+    raise exception 'FAIL: authenticated can execute booking.approve_booking (cross-tenant hole)';
+  end if;
+  if has_function_privilege('anon', 'booking.approve_booking(uuid,uuid)', 'execute') then
+    raise exception 'FAIL: anon can execute booking.approve_booking';
+  end if;
+  if not has_function_privilege('service_role', 'booking.approve_booking(uuid,uuid)', 'execute') then
+    raise exception 'FAIL: service_role lost execute on booking.approve_booking (app would break)';
+  end if;
+  raise notice 'PASS: 0025 booking write RPCs are service-role-only';
+end $$;
+
 select 'ALL SECURITY-LOGIC TESTS PASSED' as result;

@@ -839,6 +839,22 @@ const da: Catalog = {
   "settings.privacy.export.hint": "Fuld eksport af alt i dit arbejdsrum — personer, gudstjenester, vagter, beskeder. GDPR artikel 20.",
   "people.erase": "Slet person (GDPR)",
   "people.erase.confirm": "Dette fjerner navn og kontaktoplysninger permanent. Tjenestehistorik forbliver anonym. Fortsæt?",
+
+  "plannerChat.title": "Planlægningsassistent",
+  "plannerChat.intro": "Spørg med almindelige ord — jeg bruger menighedens egne planlægningsmotorer og viser dig et udkast til gennemsyn. Intet gemmes, før du godkender det.",
+  "plannerChat.placeholder": "f.eks. udfyld de åbne roller retfærdigt",
+  "plannerChat.send": "Send",
+  "plannerChat.sending": "Tænker…",
+  "plannerChat.diff.title": "Foreslåede tildelinger ({count})",
+  "plannerChat.diff.unfilled": "{count} rolle(r) mangler stadig nogen.",
+  "plannerChat.diff.accept": "Godkend udkast",
+  "plannerChat.diff.accepting": "Gemmer…",
+  "plannerChat.diff.accepted": "Gemt",
+  "plannerChat.diff.notSaved": "Intet gemmes, før du godkender.",
+  "plannerChat.unavailable.noKey": "AI-assistenten er slået fra. Autofyld-knappen virker som sædvanlig.",
+  "plannerChat.unavailable.consent": "Slå AI-funktioner til i Indstillinger for at bruge assistenten. Autofyld-knappen virker uden.",
+  "plannerChat.unavailable.quota": "Du har brugt månedens AI-kvote. Autofyld-knappen virker stadig.",
+  "plannerChat.unavailable.error": "Assistenten kunne ikke svare lige nu. Prøv igen, eller brug autofyld-knappen.",
 };
 
 export default da;

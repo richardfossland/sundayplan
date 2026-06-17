@@ -852,6 +852,22 @@ const de: Catalog = {
   "settings.privacy.export.hint": "Ein vollständiger Export von allem in Ihrem Arbeitsbereich — Personen, Gottesdienste, Einsätze, Nachrichten. DSGVO Artikel 20.",
   "people.erase": "Person löschen (DSGVO)",
   "people.erase.confirm": "Dies entfernt Name und Kontaktdaten dauerhaft. Der Dienstverlauf bleibt anonym. Fortfahren?",
+
+  "plannerChat.title": "Planungsassistent",
+  "plannerChat.intro": "Frag in einfachen Worten — ich nutze die eigenen Planungsmodule der Gemeinde und zeige dir einen Entwurf zur Prüfung. Nichts wird gespeichert, bis du es bestätigst.",
+  "plannerChat.placeholder": "z. B. die offenen Rollen fair besetzen",
+  "plannerChat.send": "Senden",
+  "plannerChat.sending": "Denke nach…",
+  "plannerChat.diff.title": "Vorgeschlagene Zuteilungen ({count})",
+  "plannerChat.diff.unfilled": "{count} Rolle(n) brauchen noch jemanden.",
+  "plannerChat.diff.accept": "Entwurf übernehmen",
+  "plannerChat.diff.accepting": "Speichere…",
+  "plannerChat.diff.accepted": "Gespeichert",
+  "plannerChat.diff.notSaved": "Nichts wird gespeichert, bis du bestätigst.",
+  "plannerChat.unavailable.noKey": "Der KI-Assistent ist aus. Die Auto-Ausfüllen-Schaltfläche funktioniert wie gewohnt.",
+  "plannerChat.unavailable.consent": "Aktiviere KI-Funktionen in den Einstellungen, um den Assistenten zu nutzen. Auto-Ausfüllen funktioniert auch ohne.",
+  "plannerChat.unavailable.quota": "Du hast das KI-Kontingent dieses Monats aufgebraucht. Auto-Ausfüllen funktioniert weiterhin.",
+  "plannerChat.unavailable.error": "Der Assistent konnte gerade nicht antworten. Bitte versuche es erneut oder nutze Auto-Ausfüllen.",
 };
 
 export default de;

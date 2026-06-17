@@ -7,6 +7,43 @@ import { getCurrentChurchId } from "@/lib/data/church";
 import { buildAutoFillSlots } from "@/lib/data/autofill";
 
 /**
+ * Apply the change set the Pastor's-chat agent proposed and the planner
+ * accepted. CRITICAL: we do NOT trust the model's posted assignments — we
+ * RE-RUN the deterministic engine server-side and write THAT, so the model can
+ * never inject a person it didn't legitimately earn through the engine. `balanced`
+ * selects the same flattening pass the agent narrated. Identical write semantics
+ * to {@link autoFillSchedule}: only empty cells, proposals land pending/'auto_fill'.
+ */
+export async function applyAgentProposal(balanced: boolean): Promise<void> {
+  const churchId = await getCurrentChurchId();
+  if (!churchId) return;
+
+  const { slots, minRestDays } = await buildAutoFillSlots(
+    new Date(),
+    balanced ? { withWindowPriors: true } : {},
+  );
+  const { assignments } = balanced
+    ? balancedAutoFill(slots, { minRestDays })
+    : autoFill(slots, { minRestDays });
+  if (assignments.length === 0) {
+    revalidatePath("/schedule");
+    return;
+  }
+
+  const supabase = await createClient();
+  const rows = assignments.map((a) => ({
+    church_id: churchId,
+    service_id: a.service_id,
+    role_id: a.role_id,
+    member_id: a.member_id,
+    status: "pending",
+    created_by: "auto_fill",
+  }));
+  await supabase.from("assignment").upsert(rows, { onConflict: "service_id,role_id,member_id" });
+  revalidatePath("/schedule");
+}
+
+/**
  * Assign a member to a (service, role) slot. Upserts on the natural key so
  * re-assigning a member who was previously removed just flips them back to
  * pending rather than tripping the unique (service_id, role_id, member_id).

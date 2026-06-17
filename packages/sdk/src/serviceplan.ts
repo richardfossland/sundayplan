@@ -5,27 +5,35 @@
  * the setlist into the cross-app canonical `ServicePlan` shape that SundayStage
  * (and the rest of the suite) consumes. No DB, no network, no clock.
  *
- * The canonical shapes here are FIELD-IDENTICAL mirrors of sunday-platform
- * `@sunday/contracts` v0.4.0 — `src/service.ts` (`ServicePlan`, `ServiceRef`,
- * `SetlistItem`, `ServiceItemKind`), `src/song.ts` (`SongRef`) and
- * `src/mapping.ts` (`PLAN_TO_CANONICAL`). We can't import `@sunday/*` yet
- * (sunday-platform is not published), so the contract is re-declared locally
- * with this note. Do not add or rename fields without changing the canonical
- * contract first; do not add a cross-repo path dependency.
+ * The canonical shapes are now imported DIRECTLY from sunday-platform
+ * `@sunday/contracts` (v0.4.1) — `service.ts` (`ServicePlan`, `ServiceRef`,
+ * `SetlistItem`, `ServiceItemKind`), `song.ts` (`SongRef`), `mapping.ts`
+ * (`serviceItemKindFromPlan`) and `common.ts` (`SCHEMA_VERSION`). This module
+ * re-exports them under the historical `Canonical*`/`ServicePlan` names so the
+ * SundayPlan callers and tests keep their imports unchanged. There is no longer
+ * a local mirror to drift; the contract package is the single source of truth.
  *
  * Two domain unions feed the canonical `kind`:
  *   - SundayPlan's own per-service {@link ServiceItemKind}
  *     (welcome | song | scripture | sermon | announcement | gap), and
  *   - the template-level {@link TemplateItemKind}
  *     (+ worship_set | response | closing).
- * Both are funnelled through one mapping (the same table as the canonical
- * `serviceItemKindFromPlan`): `worship_set` → `song`, `closing` → `custom`,
- * anything unrecognized degrades to `"custom"` rather than throwing, so an
- * exporter never loses a line. Consumers that must also accept payloads from
- * OLDER SundayPlan builds (which put `worship_set`/`closing` on the wire) can
- * use the canonical `serviceItemKindFromWire` normaliser.
+ * Both are funnelled through one mapping (the canonical `serviceItemKindFromPlan`,
+ * re-exported here as {@link toCanonicalKind}): `worship_set` → `song`,
+ * `closing` → `custom`, anything unrecognized degrades to `"custom"` rather than
+ * throwing, so an exporter never loses a line. Consumers that must also accept
+ * payloads from OLDER SundayPlan builds (which put `worship_set`/`closing` on
+ * the wire) can use the canonical `serviceItemKindFromWire` normaliser.
  */
 
+import {
+  SCHEMA_VERSION as CONTRACT_SCHEMA_VERSION,
+  serviceItemKindFromPlan,
+  type ServiceItemKind as CanonicalServiceItemKindContract,
+  type SongRef,
+  type SetlistItem,
+  type ServicePlan as CanonicalServicePlan,
+} from "@sunday/contracts";
 import type {
   Service,
   ServiceItem,
@@ -35,124 +43,53 @@ import type {
   SetlistSong,
 } from "@sundayplan/shared";
 
-// ── Canonical contract (FIELD-IDENTICAL mirror of sunday-contracts v0.4.0) ─────
+// ── Canonical contract (re-exported from @sunday/contracts v0.4.1) ─────────────
 
 /** Wire schema version every canonical payload carries. */
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = CONTRACT_SCHEMA_VERSION;
 
 /**
- * Canonical service-item kind shared across the Sunday suite.
- * FIELD-IDENTICAL mirror of `ServiceItemKind` (@sunday/contracts v0.4.0,
- * src/service.ts). Note this is the CANONICAL union — SundayPlan's local
+ * Canonical service-item kind shared across the Sunday suite. The CANONICAL
+ * union from `@sunday/contracts` (`ServiceItemKind`) — SundayPlan's local
  * `worship_set`/`closing` are mapped onto it by {@link toCanonicalKind}.
  */
-export type CanonicalServiceItemKind =
-  | "song"
-  | "scripture"
-  | "sermon"
-  | "reading"
-  | "prayer"
-  | "offering"
-  | "announcement"
-  | "welcome"
-  | "response"
-  | "media"
-  | "gap"
-  | "custom";
+export type CanonicalServiceItemKind = CanonicalServiceItemKindContract;
 
 /**
- * A cross-app reference to a song. FIELD-IDENTICAL mirror of `SongRef`
- * (@sunday/contracts v0.4.0, src/song.ts). The SundayPlan-local song id rides
- * in `local_id`; `sundaysong_id` is the shared-catalog id when linked. Carries
- * the song's home key (toneart) + language so Stage can present it faithfully.
+ * A cross-app reference to a song — the canonical `SongRef` from
+ * `@sunday/contracts`. The SundayPlan-local song id rides in `local_id`;
+ * `sundaysong_id` is the shared-catalog id when linked.
  */
-export interface CanonicalSongRef {
-  /** SundaySong catalog id, when this song is linked to the shared catalog. */
-  sundaysong_id: string | null;
-  /** The originating app's own row id (SundayPlan-local song id). */
-  local_id: string | null;
-  title: string;
-  /** CCLI song number, when registered. */
-  ccli_song_id: string | null;
-  /** TONO work id, when registered. */
-  tono_work_id: string | null;
-  /** The song's home key, e.g. "G". */
-  default_key: string | null;
-  /** BCP-47 / ISO-639 language code; "und" when undetermined. */
-  language: string;
-}
+export type CanonicalSongRef = SongRef;
 
 /**
- * One line in a canonical service plan. FIELD-IDENTICAL mirror of
- * `SetlistItem` (@sunday/contracts v0.4.0, src/service.ts).
+ * One line in a canonical service plan — the canonical `SetlistItem` from
+ * `@sunday/contracts`.
  */
-export interface CanonicalServiceItem {
-  position: number;
-  kind: CanonicalServiceItemKind;
-  title: string;
-  /** Present only for song items. */
-  song_ref: CanonicalSongRef | null;
-  /** Present only for scripture items, e.g. "John 3:16". */
-  scripture_ref: string | null;
-  /** Per-service key override for a song (e.g. transposed), when set. */
-  key_override: string | null;
-  /** Duration in whole minutes. */
-  duration_min: number;
-  notes: string | null;
-}
+export type CanonicalServiceItem = SetlistItem;
 
 /**
- * The canonical, app-agnostic service plan SundayStage consumes.
- * FIELD-IDENTICAL mirror of `ServicePlan`/`ServiceRef` (@sunday/contracts
- * v0.4.0, src/service.ts) — including the `schema_version` envelope on both
- * the plan and the service ref.
+ * The canonical, app-agnostic service plan SundayStage consumes — the canonical
+ * `ServicePlan` from `@sunday/contracts` (incl. the `schema_version` envelope on
+ * both the plan and the service ref).
  */
-export interface ServicePlan {
-  schema_version: number;
-  service: {
-    schema_version: number;
-    id: string;
-    church_id: string;
-    name: string;
-    /** ISO-8601 UTC datetime. */
-    starts_at: string;
-    state: string;
-    was_streamed: boolean;
-    notes: string | null;
-  };
-  items: CanonicalServiceItem[];
-}
+export type ServicePlan = CanonicalServicePlan;
 
 // ── Kind mapping ───────────────────────────────────────────────────────────────
 
 /**
  * Map a SundayPlan kind (either the per-service {@link ServiceItemKind} or the
- * template-level {@link TemplateItemKind}) onto the canonical kind. The table
- * matches the canonical `PLAN_TO_CANONICAL` (@sunday/contracts v0.4.0,
- * src/mapping.ts) exactly: `worship_set` → `song` (the canonical union has no
- * worship_set), `closing` → `custom`. Unknown inputs degrade to `"custom"` so
- * an exporter never drops or throws on a line it doesn't recognize.
+ * template-level {@link TemplateItemKind}) onto the canonical kind. This is the
+ * canonical `serviceItemKindFromPlan` from `@sunday/contracts`: `worship_set` →
+ * `song` (the canonical union has no worship_set), `closing` → `custom`. Unknown
+ * inputs degrade to `"custom"` so an exporter never drops or throws on a line it
+ * doesn't recognize. (The canonical helper already guards against inherited
+ * Object.prototype keys.)
  */
-const KIND_MAP: Record<string, CanonicalServiceItemKind> = {
-  welcome: "welcome",
-  worship_set: "song",
-  song: "song",
-  scripture: "scripture",
-  sermon: "sermon",
-  response: "response",
-  closing: "custom",
-  announcement: "announcement",
-  gap: "gap",
-};
-
 export function toCanonicalKind(
   kind: ServiceItemKind | TemplateItemKind | string,
 ): CanonicalServiceItemKind {
-  // Only OWN keys count, so a hostile "constructor"/"toString" input degrades
-  // to "custom" instead of leaking an inherited Object.prototype member.
-  return Object.prototype.hasOwnProperty.call(KIND_MAP, kind)
-    ? KIND_MAP[kind]
-    : "custom";
+  return serviceItemKindFromPlan(kind);
 }
 
 // ── Exporter ───────────────────────────────────────────────────────────────────

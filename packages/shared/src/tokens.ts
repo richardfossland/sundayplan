@@ -38,7 +38,7 @@ export const tokens = {
       100: "oklch(0.95 0.06 85)",
       200: "oklch(0.91 0.10 85)",
       300: "oklch(0.87 0.14 85)",
-      400: "oklch(0.84 0.16 85)", // primary accent
+      400: "oklch(0.81 0.14 83)", // primary accent — suite canonical gold #EBB84B
       500: "oklch(0.78 0.16 80)",
       600: "oklch(0.68 0.15 75)",
       700: "oklch(0.56 0.13 70)",

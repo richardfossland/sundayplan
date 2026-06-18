@@ -38,7 +38,7 @@
   --color-gold-100: oklch(0.95 0.06 85);
   --color-gold-200: oklch(0.91 0.10 85);
   --color-gold-300: oklch(0.87 0.14 85);
-  --color-gold-400: oklch(0.84 0.16 85);
+  --color-gold-400: oklch(0.81 0.14 83); /* suite canonical gold #EBB84B */
   --color-gold-500: oklch(0.78 0.16 80);
   --color-gold-600: oklch(0.68 0.15 75);
   --color-gold-700: oklch(0.56 0.13 70);
@@ -86,5 +86,5 @@
 
 /* A hairline gold keyline — the recurring "Sunday" warmth motif. */
 @utility keyline {
-  border-top: 1px solid oklch(0.84 0.16 85 / 0.35);
+  border-top: 1px solid oklch(0.81 0.14 83 / 0.35);
 }

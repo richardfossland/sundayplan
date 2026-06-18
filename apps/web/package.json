@@ -7,7 +7,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "echo 'lint placeholder'",
+    "lint": "echo 'lint: no eslint configured for this app yet — see README/PR; tsc --noEmit (typecheck) is the gate for now'",
     "typecheck": "node scripts/check-i18n.mjs && tsc --noEmit",
     "test": "vitest run",
     "clean": "rm -rf .next .turbo .open-next",

@@ -140,6 +140,9 @@ importers:
       vitest:
         specifier: ^4.1.7
         version: 4.1.7(@types/node@22.19.19)(vite@8.0.14(@types/node@22.19.19)(esbuild@0.27.3)(jiti@2.7.0)(terser@5.16.9)(yaml@2.9.0))
+      wrangler:
+        specifier: ^4.99.0
+        version: 4.99.0
 
   packages/auth:
     dependencies:

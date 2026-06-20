@@ -6,6 +6,11 @@
 type Catalog = Record<string, string>;
 
 const de: Catalog = {
+  "services.sendToStage": "An Stage senden",
+  "services.sendToStage.sending": "Senden …",
+  "services.sendToStage.code": "Anzeigecode: {code}",
+  "services.sendToStage.open": "In Stage öffnen",
+  "services.sendToStage.error": "Senden an Stage fehlgeschlagen.",
   // Navigation shell
   "nav.dashboard": "Übersicht",
   "nav.services": "Gottesdienste",

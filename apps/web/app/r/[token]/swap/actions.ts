@@ -112,6 +112,17 @@ export async function proposeReplacement(token: string, replacementMemberId: str
   if (!orig) return { ok: false, error: "not_found" };
   const a = orig as { church_id: string; service_id: string; role_id: string; member_id: string };
 
+  // The replacement member id comes from the client — never trust it. Validate it
+  // belongs to THIS church, else a valid swap token could inject a member from
+  // another church (cross-tenant) into this church's assignment.
+  const { data: repl } = await admin
+    .from("member")
+    .select("id")
+    .eq("id", replacementMemberId)
+    .eq("church_id", a.church_id)
+    .maybeSingle();
+  if (!repl) return { ok: false, error: "invalid_member" };
+
   // Add the replacement as a pending proposal (planner-style natural-key upsert).
   const { error: insErr } = await admin.from("assignment").upsert(
     {

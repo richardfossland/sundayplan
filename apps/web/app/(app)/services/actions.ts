@@ -7,6 +7,7 @@ import type { ServiceItemKind, TemplateItemKind } from "@sundayplan/shared";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/data/church";
 import { getTemplateDetail } from "@/lib/data/services";
+import { getServicePlan } from "@/lib/data/serviceplan";
 
 export type ServiceFormState = { error: string | null };
 export type ItemState = { error: string | null };
@@ -239,4 +240,50 @@ export async function moveServiceItem(
   await supabase.from("service_item").update({ position: b.position }).eq("id", a.id);
 
   revalidatePath(`/services/${serviceId}`);
+}
+
+// ── Send to SundayStage ──────────────────────────────────────────────────────
+
+export type SendToStageState =
+  | { status: "idle" }
+  | { status: "sent"; code: string; openUrl: string }
+  | { status: "error"; message: string };
+
+/**
+ * Build this service's canonical ServicePlan and hand it to SundayStage's import
+ * endpoint, which creates a session pre-seeded with the order of service. Returns
+ * the 6-digit display code + a deep link that opens the Stage operator (session
+ * secret in the URL fragment). Auth: the route sits behind (app) middleware;
+ * getCurrentChurchId() guards, and getServicePlan runs under the planner's RLS.
+ */
+export async function sendServicePlanToStage(
+  serviceId: string,
+  _prev: SendToStageState,
+  _formData: FormData,
+): Promise<SendToStageState> {
+  const churchId = await getCurrentChurchId();
+  if (!churchId) return { status: "error", message: "no_church" };
+
+  const result = await getServicePlan(serviceId);
+  if (!result.ok) return { status: "error", message: "service_not_found" };
+
+  const importUrl =
+    process.env.STAGE_IMPORT_URL ??
+    "https://stage.sundaysuite.app/api/sessions/import-serviceplan";
+  try {
+    const res = await fetch(importUrl, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(result.plan),
+    });
+    if (!res.ok) return { status: "error", message: `stage_${res.status}` };
+    const data = (await res.json()) as { id?: string; code?: string; secret?: string };
+    if (!data.id || !data.code || !data.secret) {
+      return { status: "error", message: "bad_response" };
+    }
+    const openUrl = `${new URL(importUrl).origin}/o/${data.id}#s=${data.secret}`;
+    return { status: "sent", code: data.code, openUrl };
+  } catch {
+    return { status: "error", message: "network" };
+  }
 }

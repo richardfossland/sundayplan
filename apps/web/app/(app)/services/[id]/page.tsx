@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Badge, Card, CardHeader } from "@/components/ui";
 import { ServiceEditor } from "@/components/service-editor";
+import { SendToStageButton } from "@/components/send-to-stage-button";
 import { getService, type ServiceAssignmentRow } from "@/lib/data/services";
 import { getSongOptions } from "@/lib/data/songs";
 import { getT, getLocale, type TFn } from "@/lib/i18n/server";
@@ -84,6 +85,7 @@ export default async function ServicePage({ params }: { params: Promise<{ id: st
             >
               {t("common.edit")}
             </Link>
+            <SendToStageButton serviceId={id} />
           </div>
         </div>
         <p className="mt-2 text-sm text-ink-400">

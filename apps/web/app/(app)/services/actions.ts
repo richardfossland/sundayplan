@@ -270,11 +270,19 @@ export async function sendServicePlanToStage(
   const importUrl =
     process.env.STAGE_IMPORT_URL ??
     "https://stage.sundaysuite.app/api/sessions/import-serviceplan";
+  // Bound the whole exchange — including the body read — with one AbortController.
+  // A cross-app call to Stage that hangs after headers arrive would otherwise
+  // block the Worker invocation indefinitely (the suite-wide timedFetch gotcha);
+  // the timer clears only after res.json() resolves, so a stalled body is aborted
+  // too. The abort surfaces as the existing "network" error.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
   try {
     const res = await fetch(importUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(result.plan),
+      signal: controller.signal,
     });
     if (!res.ok) return { status: "error", message: `stage_${res.status}` };
     const data = (await res.json()) as { id?: string; code?: string; secret?: string };
@@ -285,5 +293,7 @@ export async function sendServicePlanToStage(
     return { status: "sent", code: data.code, openUrl };
   } catch {
     return { status: "error", message: "network" };
+  } finally {
+    clearTimeout(timeout);
   }
 }

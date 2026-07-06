@@ -5,6 +5,10 @@ import { autoFill, balancedAutoFill, type FairnessSummary } from "@sundayplan/sd
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/data/church";
 import { buildAutoFillSlots } from "@/lib/data/autofill";
+import {
+  assignmentTargetsInChurch,
+  serviceInChurch,
+} from "@/lib/data/assignment-guard";
 
 /**
  * Apply the change set the Pastor's-chat agent proposed and the planner
@@ -56,7 +60,12 @@ export async function createAssignment(
   const churchId = await getCurrentChurchId();
   if (!churchId) return;
   const supabase = await createClient();
-  // RLS (assignment_planner_all) scopes this to the planner's church.
+  // The assignment FKs aren't church-constrained and RLS only checks the
+  // denormalized church_id, so verify the triple belongs to THIS church before
+  // writing — otherwise a planner could cross-link another church's data.
+  if (!(await assignmentTargetsInChurch(supabase, churchId, serviceId, roleId, memberId))) {
+    return;
+  }
   await supabase.from("assignment").upsert(
     {
       church_id: churchId,
@@ -81,6 +90,11 @@ export async function copyWeek(fromServiceId: string, toServiceId: string): Prom
   const churchId = await getCurrentChurchId();
   if (!churchId || fromServiceId === toServiceId) return;
   const supabase = await createClient();
+  // The target service is client-supplied and rows are written with our own
+  // church_id — verify it belongs to this church so a copy can't land on another
+  // tenant's service. (Source role/member come from the RLS-scoped read below,
+  // which already returns only this church's rows.)
+  if (!(await serviceInChurch(supabase, churchId, toServiceId))) return;
   const { data } = await supabase
     .from("assignment")
     .select("role_id, member_id, status")

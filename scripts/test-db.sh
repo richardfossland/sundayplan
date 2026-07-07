@@ -32,7 +32,7 @@ for t in supabase/tests/*_logic_test.sql; do
   docker cp "$t" "$NAME:/tmp/t.sql" >/dev/null
   OUT=$(docker exec "$NAME" psql -U postgres -v ON_ERROR_STOP=1 -f /tmp/t.sql 2>&1) || true
   echo "$OUT" | grep -E "PASS|FAIL" || true
-  echo "$OUT" | grep -qE "ALL (SECURITY-LOGIC|BOOKING-LOGIC) TESTS PASSED" \
+  echo "$OUT" | grep -qE "ALL (SECURITY-LOGIC|BOOKING-LOGIC|COMMS-RLS) TESTS PASSED" \
     || { echo "TESTS FAILED in $(basename "$t")"; echo "$OUT" | tail -30; exit 1; }
 done
 

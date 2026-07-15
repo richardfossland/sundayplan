@@ -16,25 +16,25 @@
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
   },
   "dependencies": {
-    "@opennextjs/cloudflare": "^1.19.11",
+    "@opennextjs/cloudflare": "^1.20.1",
     "@sundayplan/auth": "workspace:*",
     "@sundayplan/sdk": "workspace:*",
     "@sundayplan/shared": "workspace:*",
-    "@supabase/ssr": "^0.10.3",
-    "@supabase/supabase-js": "^2.106.2",
-    "lucide-react": "^1.17.0",
+    "@supabase/ssr": "^0.12.3",
+    "@supabase/supabase-js": "^2.110.5",
+    "lucide-react": "^1.24.0",
     "next": "^15.5.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.0",
+    "@tailwindcss/postcss": "^4.3.2",
     "@types/node": "^22.10.0",
-    "@types/react": "^19.1.0",
+    "@types/react": "^19.2.17",
     "@types/react-dom": "^19.1.0",
-    "tailwindcss": "^4.1.0",
+    "tailwindcss": "^4.3.2",
     "typescript": "^5.7.0",
-    "vitest": "^4.1.7",
-    "wrangler": "^4.99.0"
+    "vitest": "^4.1.10",
+    "wrangler": "^4.111.0"
   }
 }

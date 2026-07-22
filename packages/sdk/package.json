@@ -19,7 +19,7 @@
     "@sundayplan/shared": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.7.0",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.7"
   }
 }

@@ -17,3 +17,33 @@ onlyBuiltDependencies:
   - "@tailwindcss/oxide"
   - esbuild
   - workerd
+
+# Transitive sikkerhetsfikser. Alle tre kommer fra pakker som pinner dem selv
+# (next pinner postcss eksakt og sharp som optional; vitest drar vite), så det
+# finnes ingen manifestlinje å heve. Overstyringene sier hva som faktisk skal
+# installeres, uten å røre en eneste erklært avhengighet.
+#
+#   postcss  ≥8.5.23  GHSA-qx2v-qp2m-jg93, -6g55-p6wh-862q, -r28c-9q8g-f849,
+#                     -fxqj-rqcc-2cmp (sourceMappingURL-sti-traversering + XSS
+#                     i stringify). Rekkevidde her: byggemaskinen, og kun med
+#                     CSS fra repoet selv.
+#   sharp    ≥0.35.0  GHSA-f88m-g3jw-g9cj (libvips-CVE-er). next/image går via
+#                     Cloudflares egen bildehåndtering i produksjon — sharp
+#                     kjører ikke der — men gulvet koster ingenting.
+#   vite     ≥8.0.16  GHSA-fx2h-pf6j-xcff, -v6wh-96g9-6wx3 (server.fs.deny-
+#                     omgåelse og NTLM-lekkasje, begge Windows + dev-server).
+#                     Kommer fra vitest.
+#
+# Fjern en linje her når pakken over den har hevet sitt eget gulv.
+#
+# FELLE: `vite` er en PEER av vitest, ikke en vanlig avhengighet, og pnpm
+# gjenbruker den peer-suffiksede oppløsningen fra låsfila. Et spenn-overstyring
+# (`>=8.0.16`) skrev om peer-KRAVET i låsfila, men lot snapshotet stå på 8.0.14
+# — og `pnpm update vite -r` rørte den heller ikke. Den måtte pinnes eksakt
+# (`vite: "8.0.16"`) én gang for å tvinge ny oppløsning; deretter kunne spennet
+# settes tilbake, og 8.0.16 ble stående. Ser du en overstyring som «ikke virker»
+# på en peer, er dette grunnen.
+overrides:
+  postcss: ">=8.5.23"
+  sharp: ">=0.35.0"
+  vite: ">=8.0.16"

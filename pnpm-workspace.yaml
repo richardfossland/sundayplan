@@ -27,9 +27,12 @@ onlyBuiltDependencies:
 #                     -fxqj-rqcc-2cmp (sourceMappingURL-sti-traversering + XSS
 #                     i stringify). Rekkevidde her: byggemaskinen, og kun med
 #                     CSS fra repoet selv.
-#   sharp    ≥0.35.0  GHSA-f88m-g3jw-g9cj (libvips-CVE-er). next/image går via
-#                     Cloudflares egen bildehåndtering i produksjon — sharp
-#                     kjører ikke der — men gulvet koster ingenting.
+#   sharp    ≥0.35.4  GHSA-f88m-g3jw-g9cj (libvips-CVE-er) + varselet fra
+#                     2026-09-20 mot <0.35.4. next/image går via Cloudflares
+#                     egen bildehåndtering i produksjon — sharp kjører ikke der
+#                     — men gulvet koster ingenting. Gulvet er hevet fra 0.35.0
+#                     fordi BÅDE miniflare (eksakt pin) og en foreldet oppføring
+#                     under next@15 holdt igjen på 0.35.2.
 #   vite     ≥8.0.16  GHSA-fx2h-pf6j-xcff, -v6wh-96g9-6wx3 (server.fs.deny-
 #                     omgåelse og NTLM-lekkasje, begge Windows + dev-server).
 #                     Kommer fra vitest.
@@ -45,5 +48,5 @@ onlyBuiltDependencies:
 # på en peer, er dette grunnen.
 overrides:
   postcss: ">=8.5.23"
-  sharp: ">=0.35.0"
+  sharp: ">=0.35.4"
   vite: ">=8.0.16"

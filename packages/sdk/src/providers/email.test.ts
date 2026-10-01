@@ -106,4 +106,15 @@ describe("SmtpEmailProvider", () => {
     const provider = new SmtpEmailProvider({}, { async sendMail() { return {}; } });
     expect((await provider.send(req)).error).toContain("SMTP_URL");
   });
+
+  it("reports a missing nodemailer as smtp_error instead of throwing", async () => {
+    // No injected transport: send() takes the runtime import path. nodemailer
+    // is deliberately not a dependency of this repo, so the import rejects —
+    // exactly what happens on Workers — and must surface as a failed result.
+    const provider = new SmtpEmailProvider(ENV);
+    const result = await provider.send(req);
+    expect(result).toMatchObject({ outcome: "failed", provider: "smtp" });
+    expect(result.error).toMatch(/^smtp_error: /);
+    expect(result.error).toContain("nodemailer");
+  });
 });

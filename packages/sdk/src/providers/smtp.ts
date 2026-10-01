@@ -33,6 +33,13 @@ export class SmtpEmailProvider implements Provider {
   private readonly smtpUrl: string;
   private readonly from?: string;
   private transport?: MailTransport;
+  /**
+   * Module specifier for the SMTP library. Deliberately an instance field and
+   * not a local `const`: minifiers constant-fold a local into
+   * `import("nodemailer")`, which OpenNext's esbuild pass then fails to
+   * resolve when bundling the Worker. Nothing folds a property read.
+   */
+  private readonly mailerModule: string = "nodemailer";
 
   constructor(env: ProviderEnv, transport?: MailTransport) {
     this.smtpUrl = env.SMTP_URL ?? "";
@@ -61,10 +68,20 @@ export class SmtpEmailProvider implements Provider {
 
   private async resolveTransport(): Promise<MailTransport> {
     if (this.transport) return this.transport;
-    // Computed specifier so bundlers (OpenNext/esbuild for Workers) leave the
-    // import to runtime instead of pulling nodemailer into the Worker bundle.
-    const specifier = "nodemailer";
-    const nodemailer = (await import(/* @vite-ignore */ specifier)) as {
+    // Runtime-only import so no bundler pulls nodemailer (deliberately not a
+    // dependency) into the web/Worker bundles:
+    //  - `webpackIgnore` makes webpack and Turbopack emit a native `import()`
+    //    instead of resolving it. Without it Turbopack (Next 16's default)
+    //    fails the build with "Module not found", and webpack swaps in an empty
+    //    context module that can never load nodemailer, even on Node.
+    //  - `@vite-ignore` does the same for vitest/Vite.
+    //  - the specifier is a property read (see `mailerModule`), so OpenNext's
+    //    esbuild pass sees a non-literal import and leaves it to runtime.
+    // Where nodemailer is missing (e.g. on Workers) the import rejects and
+    // `send()` reports it as `smtp_error`.
+    const nodemailer = (await import(
+      /* webpackIgnore: true */ /* @vite-ignore */ this.mailerModule
+    )) as {
       createTransport(url: string): MailTransport;
     };
     this.transport = nodemailer.createTransport(this.smtpUrl);

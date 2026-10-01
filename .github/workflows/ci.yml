@@ -45,3 +45,39 @@ jobs:
           # harmless placeholders to keep the build hermetic (no real backend).
           NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+
+  worker:
+    # The OpenNext/Cloudflare Worker build catches bundling breaks the check job
+    # does NOT — e.g. an import OpenNext's esbuild pass cannot resolve, or a
+    # Node-runtime proxy.ts that OpenNext rejects — which otherwise only surface
+    # at deploy. No Cloudflare auth: this builds the Worker, it never deploys.
+    name: worker build (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [web, booking]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.4.0
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: OpenNext Worker build
+        run: pnpm --filter @sundayplan/${{ matrix.app }} cf:build
+        env:
+          # Same harmless placeholders as the check job's build step. CI has no
+          # .env files, so nothing real can be baked into the Worker bundle.
+          NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54321
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key

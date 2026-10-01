@@ -19,7 +19,10 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 describe("ResendEmailProvider", () => {
-  const ENV = { RESEND_API_KEY: "re_x", EMAIL_FROM: "SundayPlan <plan@mail.sundaysuite.app>" };
+  const ENV = {
+    RESEND_API_KEY: "re_x",
+    EMAIL_FROM: "SundayPlan <plan@mail.sundaysuite.app>",
+  };
 
   it("posts to the Resend API with bearer auth and returns the id", async () => {
     const calls: { url: string; init?: RequestInit }[] = [];
@@ -30,18 +33,28 @@ describe("ResendEmailProvider", () => {
 
     const result = await provider.send(req);
 
-    expect(result).toMatchObject({ outcome: "sent", provider: "resend", provider_message_id: "email-1" });
+    expect(result).toMatchObject({
+      outcome: "sent",
+      provider: "resend",
+      provider_message_id: "email-1",
+    });
     expect(calls[0].url).toBe("https://api.resend.com/emails");
-    const payload = JSON.parse(String(calls[0].init?.body)) as Record<string, unknown>;
+    const payload = JSON.parse(String(calls[0].init?.body)) as Record<
+      string,
+      unknown
+    >;
     expect(payload.from).toBe(ENV.EMAIL_FROM);
     expect(payload.to).toEqual(["ola@kirke.no"]);
     expect(payload.subject).toBe("Du er satt opp");
-    expect((calls[0].init?.headers as Record<string, string>).Authorization).toBe("Bearer re_x");
+    expect(
+      (calls[0].init?.headers as Record<string, string>).Authorization,
+    ).toBe("Bearer re_x");
   });
 
   it("fails with config guidance when EMAIL_FROM is missing", async () => {
-    const provider = new ResendEmailProvider({ RESEND_API_KEY: "re_x" }, async () =>
-      jsonResponse(200, {}),
+    const provider = new ResendEmailProvider(
+      { RESEND_API_KEY: "re_x" },
+      async () => jsonResponse(200, {}),
     );
     const result = await provider.send(req);
     expect(result.outcome).toBe("failed");
@@ -73,7 +86,10 @@ describe("ResendEmailProvider", () => {
 });
 
 describe("SmtpEmailProvider", () => {
-  const ENV = { SMTP_URL: "smtp://u:p@mail.example.com:587", EMAIL_FROM: "plan@kirke.no" };
+  const ENV = {
+    SMTP_URL: "smtp://u:p@mail.example.com:587",
+    EMAIL_FROM: "plan@kirke.no",
+  };
 
   it("sends through the injected transport", async () => {
     const sent: unknown[] = [];
@@ -85,9 +101,18 @@ describe("SmtpEmailProvider", () => {
     };
     const provider = new SmtpEmailProvider(ENV, transport);
     const result = await provider.send(req);
-    expect(result).toMatchObject({ outcome: "sent", provider: "smtp", provider_message_id: "<m1@mail>" });
+    expect(result).toMatchObject({
+      outcome: "sent",
+      provider: "smtp",
+      provider_message_id: "<m1@mail>",
+    });
     expect(sent).toEqual([
-      { from: "plan@kirke.no", to: "ola@kirke.no", subject: "Du er satt opp", text: req.body },
+      {
+        from: "plan@kirke.no",
+        to: "ola@kirke.no",
+        subject: "Du er satt opp",
+        text: req.body,
+      },
     ]);
   });
 
@@ -103,7 +128,32 @@ describe("SmtpEmailProvider", () => {
   });
 
   it("fails with config guidance when unconfigured", async () => {
-    const provider = new SmtpEmailProvider({}, { async sendMail() { return {}; } });
+    const provider = new SmtpEmailProvider(
+      {},
+      {
+        async sendMail() {
+          return {};
+        },
+      },
+    );
     expect((await provider.send(req)).error).toContain("SMTP_URL");
+  });
+
+  it("reports a missing nodemailer as smtp_error instead of throwing", async () => {
+    // No injected transport: send() takes the runtime import path. On Workers
+    // nodemailer is never present, so the import rejects and must surface as
+    // a failed result. The specifier is pointed at a module that cannot exist,
+    // so this never dials a real SMTP server should nodemailer get installed.
+    const provider = new SmtpEmailProvider(ENV);
+    expect((provider as unknown as { mailerModule: string }).mailerModule).toBe(
+      "nodemailer",
+    );
+    Object.defineProperty(provider, "mailerModule", {
+      value: "@sundayplan/missing-mailer",
+    });
+    const result = await provider.send(req);
+    expect(result).toMatchObject({ outcome: "failed", provider: "smtp" });
+    expect(result.error).toMatch(/^smtp_error: /);
+    expect(result.error).toContain("@sundayplan/missing-mailer");
   });
 });

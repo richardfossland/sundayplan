@@ -1,5 +1,6 @@
 // Keep this as Edge `middleware.ts` despite Next 16's "use proxy" deprecation warning:
-// `proxy.ts` runs on the Node runtime, which @opennextjs/cloudflare cannot deploy.
+// `proxy.ts` runs on the Node runtime, which @opennextjs/cloudflare only supports as
+// experimental and which broke our Worker deploy before. CI fails on a proxy.ts.
 import type { NextRequest } from "next/server";
 import { updateSession } from "@/lib/supabase/middleware";
 

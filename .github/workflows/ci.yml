@@ -48,9 +48,9 @@ jobs:
 
   worker:
     # The OpenNext/Cloudflare Worker build catches bundling breaks the check job
-    # does NOT — e.g. an import OpenNext's esbuild pass cannot resolve, or a
-    # Node-runtime proxy.ts that OpenNext rejects — which otherwise only surface
-    # at deploy. No Cloudflare auth: this builds the Worker, it never deploys.
+    # does NOT — e.g. an import OpenNext's esbuild pass cannot resolve — which
+    # otherwise only surface at deploy. No Cloudflare auth: this builds the
+    # Worker, it never deploys.
     name: worker build (${{ matrix.app }})
     runs-on: ubuntu-latest
     strategy:
@@ -73,6 +73,20 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Edge middleware only (no proxy.ts)
+        # Next 16 suggests renaming middleware.ts to proxy.ts, which moves it
+        # to the Node runtime. OpenNext 1.20 still BUILDS that (only an
+        # "experimental" warning), so the build below would not catch it —
+        # but the Node middleware breaks the deployed Worker. Keep middleware.ts.
+        run: |
+          found=$(find apps/${{ matrix.app }} \( -path '*/node_modules' -o -path '*/.next' -o -path '*/.open-next' \) -prune -o \
+            \( -name 'proxy.ts' -o -name 'proxy.js' -o -name 'proxy.mjs' \) -print \
+            | grep -v '/app/' || true)
+          if [ -n "$found" ]; then
+            echo "::error::Node-runtime proxy found — keep the Edge middleware.ts: $found"
+            exit 1
+          fi
 
       - name: OpenNext Worker build
         run: pnpm --filter @sundayplan/${{ matrix.app }} cf:build

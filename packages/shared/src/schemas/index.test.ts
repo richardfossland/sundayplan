@@ -10,6 +10,8 @@ import {
   MemberInputSchema,
   MessageInputSchema,
   MessageTemplateInputSchema,
+  MessageTemplateUpdateSchema,
+  uuid,
   ServiceInputSchema,
   ServiceItemInputSchema,
   SongInputSchema,
@@ -392,5 +394,69 @@ describe("isEmailVerifiedIdentity", () => {
     expect(isEmailVerifiedIdentity({ email_verified: true })).toBe(false);
     expect(isEmailVerifiedIdentity(null)).toBe(false);
     expect(isEmailVerifiedIdentity(undefined)).toBe(false);
+  });
+});
+
+/**
+ * Behaviour pinned across the Zod 3 -> 4 bump. Every expectation below is what
+ * Zod 3.25 produced (captured before the upgrade).
+ */
+describe("zod 4 parity", () => {
+  const msg = (r: { success: boolean; error?: { issues: { message: string }[] } }) =>
+    r.success ? "ok" : r.error!.issues.map((i) => i.message).join("|");
+
+  it("uuid stays lenient like Zod 3 (non-RFC-9562 ids still pass, garbage still fails)", () => {
+    expect(uuid.safeParse("11111111-1111-1111-1111-111111111111").success).toBe(true);
+    expect(uuid.safeParse("00000000-0000-0000-0000-000000000000").success).toBe(true);
+    expect(uuid.safeParse("ffffffff-ffff-ffff-ffff-ffffffffffff").success).toBe(true);
+    expect(uuid.safeParse("zzzzzzzz-1111-1111-1111-111111111111").success).toBe(false);
+    expect(uuid.safeParse("a").success).toBe(false);
+  });
+
+  it("partial template update does NOT fill in defaults (would overwrite stored values)", () => {
+    expect(MessageTemplateUpdateSchema.parse({ name: "a" })).toEqual({ name: "a" });
+    expect(MessageTemplateUpdateSchema.parse({ is_active: false })).toEqual({ is_active: false });
+    // The create schema still defaults.
+    expect(MessageTemplateInputSchema.parse({ name: "a", channel: "sms", body: "x" })).toMatchObject({
+      purpose: "custom",
+      language: "no",
+      is_active: true,
+    });
+  });
+
+  it("user-facing validation messages keep their Zod 3 wording", () => {
+    expect(msg(MemberInputSchema.safeParse({ display_name: "" }))).toBe("String must contain at least 1 character(s)");
+    expect(msg(MemberInputSchema.safeParse({}))).toBe("Required");
+    expect(msg(AssignmentResponseSchema.safeParse({ token: "x", action: "accept" }))).toBe(
+      "String must contain at least 20 character(s)",
+    );
+    expect(msg(ServiceInputSchema.safeParse({ name: "a", starts_at_utc: "bad" }))).toBe("Invalid datetime");
+    expect(msg(SongInputSchema.safeParse({ title: "a", tempo_bpm: 5, demo_url: "x" }))).toBe(
+      "Number must be greater than or equal to 20|Invalid url",
+    );
+    expect(msg(MemberInputSchema.safeParse({ display_name: "a", email: "bad", phone_e164: "1" }))).toBe(
+      "Invalid|Invalid email",
+    );
+    expect(msg(ServiceItemInputSchema.safeParse({ position: -1, label: "x", kind: "song", duration_min: 999 }))).toBe(
+      "Number must be greater than or equal to 0|Number must be less than or equal to 360",
+    );
+    expect(msg(MessageTemplateInputSchema.safeParse({ name: "a", channel: "pigeon", body: "x" }))).toBe(
+      "Invalid enum value. Expected 'sms' | 'email' | 'push', received 'pigeon'",
+    );
+  });
+
+  it("email, url and datetime accept/reject the same samples as Zod 3", () => {
+    const email = (v: string) => MemberInputSchema.safeParse({ display_name: "a", email: v }).success;
+    expect(["a@b.no", "a.b+c@sub.example.com", "a@b", "a@b.c", "a@b..no", " a@b.no"].map(email)).toEqual([
+      true, true, false, false, false, false,
+    ]);
+    const url = (v: string) => SongInputSchema.safeParse({ title: "a", demo_url: v }).success;
+    expect(["https://a.no/x", "a.no", "http://", "//a.no", "https://a b.no"].map(url)).toEqual([
+      true, false, false, false, false,
+    ]);
+    const dt = (v: string) => isoDateTime.safeParse(v).success;
+    expect(
+      ["2026-01-01T10:00:00Z", "2026-01-01T10:00:00+01:00", "2026-01-01T10:00:00.123Z", "2026-02-30T10:00:00Z", "2026-01-01 10:00:00Z"].map(dt),
+    ).toEqual([true, true, true, false, false]);
   });
 });

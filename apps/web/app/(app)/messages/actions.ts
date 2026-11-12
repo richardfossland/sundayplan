@@ -35,7 +35,7 @@ export async function createTemplate(formData: FormData) {
     is_active: formData.get("is_active") === "on" || formData.get("is_active") === "true",
   });
   if (!parsed.success) {
-    throw new Error(parsed.error.errors[0]?.message ?? "Invalid template");
+    throw new Error(parsed.error.issues[0]?.message ?? "Invalid template");
   }
 
   const { error } = await supabase
@@ -51,7 +51,7 @@ export async function createTemplate(formData: FormData) {
 export async function updateTemplate(id: string, formData: FormData) {
   const supabase = await createClient();
 
-  const parsed = schemas.MessageTemplateInputSchema.partial().safeParse({
+  const parsed = schemas.MessageTemplateUpdateSchema.safeParse({
     name: formData.get("name") || undefined,
     channel: formData.get("channel") || undefined,
     purpose: formData.get("purpose") || undefined,
@@ -61,7 +61,7 @@ export async function updateTemplate(id: string, formData: FormData) {
     is_active: formData.get("is_active") === "on" || formData.get("is_active") === "true",
   });
   if (!parsed.success) {
-    throw new Error(parsed.error.errors[0]?.message ?? "Invalid template");
+    throw new Error(parsed.error.issues[0]?.message ?? "Invalid template");
   }
 
   const { error } = await supabase

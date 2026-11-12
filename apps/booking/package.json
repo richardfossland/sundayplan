@@ -16,7 +16,7 @@
     "cf:deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
   },
   "dependencies": {
-    "@opennextjs/cloudflare": "^1.20.17",
+    "@opennextjs/cloudflare": "^1.20.16",
     "@sundayplan/auth": "workspace:*",
     "@sundayplan/sdk": "workspace:*",
     "@sundayplan/shared": "workspace:*",
@@ -36,6 +36,6 @@
     "tailwindcss": "^4.3.5",
     "typescript": "^5.9.3",
     "vitest": "^5.1.0",
-    "wrangler": "^4.160.1"
+    "wrangler": "^4.160.0"
   }
 }

@@ -12,18 +12,6 @@ allowBuilds:
   "@tailwindcss/oxide": true
   esbuild: true
   workerd: true
-minimumReleaseAgeExclude:
-  - '@opennextjs/aws@4.1.16'
-  - '@opennextjs/cloudflare@1.20.17'
-  - '@turbo/darwin-64@2.11.11'
-  - '@turbo/darwin-arm64@2.11.11'
-  - '@turbo/linux-64@2.11.11'
-  - '@turbo/linux-arm64@2.11.11'
-  - '@turbo/windows-64@2.11.11'
-  - '@turbo/windows-arm64@2.11.11'
-  - miniflare@5.20261110.1-beta
-  - turbo@2.11.11
-  - wrangler@4.160.1
 onlyBuiltDependencies:
   - sharp
   - "@tailwindcss/oxide"

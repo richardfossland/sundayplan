@@ -9,11 +9,13 @@
  */
 
 import { z } from "zod";
+import "./legacy-messages";
 
 // ── Reusable atoms ──────────────────────────────────────────────────────────
 
-export const uuid = z.string().uuid();
-export const isoDateTime = z.string().datetime({ offset: true });
+// `z.guid()` = the lenient 8-4-4-4-12 hex check Zod 3's `.uuid()` did; Zod 4's `z.uuid()` is RFC 9562-strict.
+export const uuid = z.guid();
+export const isoDateTime = z.iso.datetime({ offset: true });
 export const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 /** RFC 5733 / E.164 phone number — `+47…`, `+1…`. */
 export const phoneE164 = z.string().regex(/^\+[1-9]\d{6,14}$/);
@@ -79,7 +81,7 @@ export const ContactChannel = z.enum(["sms", "email", "push"]);
 export const MemberInputSchema = z.object({
   display_name: z.string().min(1).max(120),
   phone_e164: phoneE164.optional().nullable(),
-  email: z.string().email().optional().nullable(),
+  email: z.email().optional().nullable(),
   language: localeCode.default("no"),
   preferred_channel: ContactChannel.default("sms"),
   birthday: isoDate.optional().nullable(),
@@ -200,8 +202,8 @@ export const SongInputSchema = z.object({
   language: localeCode.default("no"),
   themes: z.array(z.string().max(40)).max(32).default([]),
   sundaysong_id: uuid.optional().nullable(),
-  chord_chart_url: z.string().url().optional().nullable(),
-  demo_url: z.string().url().optional().nullable(),
+  chord_chart_url: z.url().optional().nullable(),
+  demo_url: z.url().optional().nullable(),
 });
 
 // ── Assignment ──────────────────────────────────────────────────────────────
@@ -315,16 +317,31 @@ export const TemplateVariable = z.enum([
   "decline_link",
 ]);
 
-export const MessageTemplateInputSchema = z.object({
+/** Template fields WITHOUT defaults — the base of both the create and the update schema. */
+const MessageTemplateFields = z.object({
   name: z.string().min(1).max(120),
   channel: MessageChannel,
-  purpose: MessagePurpose.default("custom"),
-  language: localeCode.default("no"),
+  purpose: MessagePurpose,
+  language: localeCode,
   /** Required for email; ignored for sms/push (push uses it as the title). */
   subject: z.string().max(200).optional().nullable(),
   body: z.string().min(1).max(4000),
+  is_active: z.boolean(),
+});
+
+export const MessageTemplateInputSchema = MessageTemplateFields.extend({
+  purpose: MessagePurpose.default("custom"),
+  language: localeCode.default("no"),
   is_active: z.boolean().default(true),
 });
+
+/**
+ * Partial update of a template. Deliberately built from the default-free fields:
+ * in Zod 4 `.partial()` of a schema with `.default()` would fill the defaults in
+ * and silently overwrite stored values on a PATCH-style update.
+ */
+export const MessageTemplateUpdateSchema = MessageTemplateFields.partial();
+
 
 export const DeliveryStatus = z.enum([
   "queued",

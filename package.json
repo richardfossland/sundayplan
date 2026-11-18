@@ -16,7 +16,7 @@
     "clean":     "turbo clean && rm -rf node_modules"
   },
   "devDependencies": {
-    "turbo": "^2.11.10",
+    "turbo": "^2.11.11",
     "@typescript/native": "npm:typescript@~7.0.2",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "@types/node": "^26.6.6"
